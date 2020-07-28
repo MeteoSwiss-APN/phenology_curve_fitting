@@ -27,7 +27,7 @@ Generell werden folgende Fragestellungen geklärt werden müssen:
 - Welche Parameter / Funktionen sollen von der neuen Daten Assimilation profitieren?
 - Wie häufig soll der jeweilge Parameter / Funktion an die momentanen Messwerte angepasst werden?
 - Kann dieselbe Methode für alle relevanten Pollentaxa verwendet werden?
-- Wie soll räumlich zwischen den rund 20 Stationen interpoliert werden.
+- Wie soll räumlich zwischen den rund 20 Stationen interpoliert werden?
 - Wie kann die Güte der neuen Methoden überprüft werden (was dient als "Ground-Truth")?
 - Wird die maximale Pollenemission pro Tag durch die neuen Daten aufgeweicht?
 - Wie schnell sind Messwerte verfügbar?
@@ -51,14 +51,14 @@ Folgende Teilgebiete der Pollen-Implementierung könnten von den neuen Echtzeit-
 - Phänologie: Beginn/Ende der Pollensaison von den real-time Pollendaten triggern (oder verhindern) lassen (z.B. via neu variables Feld der kritischen T-summe)
 - Stärke der Pollensaison: Mast- und Samenjahren (indirekte Skalierung der Verbreitungskarte), Ein Tuning-Faktor wird bei runtime immer definiert. 
 
-Die modellierte Pollenkonzentration in der Luft kann dabei nicht einfach näher an die Messwerte gezogen werden (Nudging der Messwerte), da diese Information schnell im Modell verloren geht, vielmehr müssen andere Parameter angepasst werden (Nudging der Parameter).
+Die modellierte Pollenkonzentration in der Luft kann dabei nicht einfach näher an die Messwerte gezogen werden (Nudging der Messwerte), da diese Information schnell verloren geht, vielmehr müssen Emissions-Parameter angepasst werden (Nudging der Parameter).
 
 Die folgenden beiden Parameter kommen als Kandidaten für Echtzeit Anpassungen in Frage:
 
 - Fraction of the grid box covered with the specific plant \\(f_{Q,cov}\\)
 - Mathematical description of the course of the pollen season \\(f_{Q,seas}\\)
 
-Der erste der beiden Parameter wird dem Modell als Grid-Inputfeld bereit gestellt (Verbreitungskarte). Es kommen sowohl direkte Skalierung dieses Feldes in Frage als auch indirekte Skalierung nachdem das Feld bereit gestellt wurden. Momentan scheint letzere Option die einfachere zu sein, da die indirekte Skalierung bei jedem Modelllauf und Zeitschritt durchgeführt werden kann. Der zweite Parameter, die Saisonalität der Pollenphänologie, wird im Modul pol_seasons jeweils berechnet und kann direkt optimiert werden.
+Der erste der beiden Parameter wird dem Modell als Grid-Inputfeld bereit gestellt (Verbreitungskarte). Es kommen sowohl direkte Skalierung dieses Feldes in Frage als auch indirekte Skalierung nachdem das Feld bereit gestellt wurden. Momentan scheint letztere Option die einfachere zu sein, da die indirekte Skalierung bei jedem Modelllauf und Zeitschritt durchgeführt werden kann. Der zweite Parameter, die Saisonalität der Pollenphänologie, wird im Modul pol_seasons jeweils berechnet und kann direkt optimiert werden.
 
 Das übergeschaltete Modul im Pollen-Code heisst "organize_pollen", das eine grosse Anzahl Subroutinen des Pollen-Codes aufruft.
 
@@ -68,20 +68,20 @@ knitr::include_graphics("figures/organize_pollen_cgraph.png")
 
 Die beiden oben genannten Parameter werden also über den folgenden Weg aufgerufen:
 
-- lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_helbig
+- lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_helbig (veraltet)
 - lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_zink
 - lmorg -> organize_pollen -> pol_seasons::calc_saisl
 
 Die erste wird nicht mehr benutzt, da Zink bessere Resultate liefert.
-Da wir im Emissionsteil arbeiten werden genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird.
+Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird.
 
 ## Die Daten
 
-Die Echtzeit-Daten der Poleno-Geräte können im Modul data_pollen geladen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht direkt im Code verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
+Die Echtzeit-Daten der Poleno-Geräte können im Modul data_pollen geladen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
 
 ## Die Verbreitungskarte
 
-Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte Pol_tuning immer bei runtime definiert werden. 1.09e5_wp wurde bis anhin als Konstanter Faktor definiert für das ganze Feld.
+Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte Pol_tuning immer bei runtime definiert werden. Beispielsweise für Birke wurde bis anhin 1.0166E7_wp Konstanter Faktor definiert für das ganze Feld. Anhand dieses Faktors wird no_max_day, die maximale Anzahl emittierter Pollenkörner definiert.
 
 ```{fortran eval = FALSE, echo = TRUE}
 ! PLANT DEPENDENT VALUES FOR BIRCH
@@ -146,7 +146,7 @@ Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte
       frac_xi_evap(lbetu) = xi_r_precip(lbetu) * dtpollen / (2.1_wp * 3600._wp)
 ```
 
-Im code oberhald wird pol_tuning definiert und mit einem konstanten Wert für Birkenpollen multipliziert (anderer Wert für jede Spezies). Dadurch wird die Variable no_max_day definiert welche dann im pol_emissions Modul wieder aufgerufen wird. 
+Im code oberhalb wird pol_tuning definiert und mit einem konstanten Wert für Birkenpollen multipliziert (anderer Wert für jede Spezies). Dadurch wird die Variable no_max_day definiert welche dann im pol_emissions Modul wieder aufgerufen wird. Wenn man nun diesen Tuning Faktor variabel für jede Gitterbox und jeden Zeitschritt definiert, kann die maximale Anzahl zu emittierender Pollenkörner max_emiss_day direkt angepasst werden.
 
 ```{fortran eval = FALSE, echo = TRUE}
 !...........................................................
@@ -175,11 +175,13 @@ Im code oberhald wird pol_tuning definiert und mit einem konstanten Wert für Bi
     
 ```
 
+Wie man im Code-Teil sehen kann, berechnet sich max_emiss_day anhand vierer Faktoren. Im ersten Schritt haben wir nun no_max_day verändert als Proxy-Skalierung der Verbreitungskarte. Als zweite Option bietet sich die die Variable \\(f_{Q,seas}\\) an.
+
 ## Die Saisonalität
 
-The mathematical description of the pollen season \\(f_{Q,seas}\\) is taken from the phenological model developed for the operational numerical pollen forecasts at MeteoSwiss (compare Section 2.3.1). It is used as an input parameter for the emission parameterization in both model congurations. See section 3.3.3 in Zink's Dissertation for more information. [Zink, 2014]
+Die mathematische Beschreibung der Pollensaison \\(f_{Q,seas}\\) ist dem phänologischen Modell entnommen, das für die operationellen numerischen Pollenvorhersagen an der MeteoSchweiz entwickelt wurde (vgl. Abschnitt 2.3.1). Es wird in beiden Modellkonfigurationen als Eingangsparameter für die Emissionsparametrisierung verwendet. Siehe Abschnitt 3.3.3 in Zinks Dissertation für weitere Informationen. [Zink, 2014]
 
-Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der letzten Subroutine des Modules, genannt calc_sdes könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnten zwei Temperatursummerfelder optimiert werden und variabel gemacht werden (tthrs_red and tthrs).
+Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der letzten Subroutine des Modules, genannt calc_sdes könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnten zwei Temperatursummerfelder optimiert werden und variabel gemacht werden (tthrs_red and tthrs). Diese beiden Felder existieren bereits im Code sind aber zeitlich fixiert.
 
 ```{fortran eval = FALSE, echo = TRUE}
 MODULE pol_seasons
@@ -223,34 +225,37 @@ END SUBROUTINE calc_saisl
 
 # Interpolation
 
-Wir werden daher zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Während der Implementierung könnte man folgenden Updates vornehmen, in zunehmender Komplexität:
+Wir werden also zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Während der Implementierung könnte man folgenden Updates vornehmen, in zunehmender Komplexität:
 
-- Die kritischen Temperatursummmer für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden.
+- Die kritischen Temperatursummmen für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden.
 - In einem nächsten Schritt könnte man zudem Transport-Ereignisse berücksichtigen und die Einzugsgebiete der Messstationen genauer definiert werden. Vorallem für das naheliegende Ausland könnte dies relevant sein (z.B. Transportereignisse von Ambrosia-Pollen von Frankreich).
-- Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische variablen wie zum Beisiel Wind berücksichtigt werden.
+- Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische Wariablen wie zum Beisiel Wind berücksichtigt werden.
 
 Für den zweiten und dritten Punkt könnten folgende Resourcen hilfreich sein:
 
-- Die Clusteranalyse von APK könnte hier helfen.
-- ML vs. Standard Methoden: Spatial Statistics mit räumlichen und zeitlichen Autokorrelationen (Andreas Papritz)
+- Die Clusteranalyse von APK um grobe Einzugsgebiete der Fallen abzuschätzen.
+- ML vs. Standard Methoden: Spatial Statistics mit räumlichen und zeitlichen Autokorrelationen (Andreas Papritz).
 - Kriging um die bodennahen Messwerte vorherzusagen und die Ähnlichkeit zu den umliegenden Messstationen zu berechnen.
 - https://opengeohub.org/machine-learning-spatial-data für ML Approaches
+
+Herausforderungen und offene Fragen:
+
 - Topographie in Alpen wird potentiell problematisch
 - Wie stark verzögert, wie häufig und in welchem Radius sollen die Emissions-Parameter angepasst werden?
 
 # Validation
 
-- Die statistische Vergleichsstudie von Hirst und Poleno Fallen von APK sollte hier hilfreich sein?
-- Welche Validations-Metriken sollen verwendet werden (evtl auch kategorische)?
+- Die statistische Vergleichsstudie von Hirst und Poleno Fallen von APK sollte hier hilfreich sein.
+- Welche Validations-Metriken sollen verwendet werden (evtl. auch kategorische)?
 - Soll man Hirst oder Poleno als Ground-Truth anerkennen? 
 - Zu welchen Zeitpunkten im Jahr soll verifiziert werden?
-- Werden eventuell noch zusätzliche Spezies analysiert?
+- Momentan werden Prognosen für 4 Spezies berechnet (Erle, Birke, Gräser, Ambrosia). Werden eventuell noch zusätzliche Spezies analysiert? 
 
-# Anforderungen / Next-Steps
+# Anforderungen / Nächste Schritte
 
-- Data Pipeline to retrieve the real-time pollen data, ask Dani (APN) what delay is still fine?
-- Where will the validation take place? Probably best to install rstudio on tsa? 
-- Use FieldExtra to analyse the model output on tsa in R?
+- Data Pipeline, um die Echtzeit-Pollendaten abzurufen, Dani fragen (APN), welche Verzögerung noch in Ordnung ist.
+- Wo wird die Validierung stattfinden? Ist es am besten, rstudio auf tsa zu installieren? 
+- Verwenden von FieldExtra, um die Modellausgabe auf tsa in R zu analysieren?
 - Mit Regula (APK) die Definition von Mast- und Samenjahren besprechen.
 - Das gesamte Projekt darf nicht zu teuer werden (~ +5% computing cost)
 
