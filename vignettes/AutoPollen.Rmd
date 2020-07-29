@@ -34,7 +34,7 @@ Generell werden folgende Fragestellungen geklärt werden müssen:
 
 # Module und Code-Auszüge
 
-Die Pollen sind anhand des folgendes Schemas in COSMO-ART implementiert.
+Die Pollen sind anhand des folgenden Schemas in COSMO-ART implementiert.
 
 ```{r}
 knitr::include_graphics("figures/diagram_implementation.png")
