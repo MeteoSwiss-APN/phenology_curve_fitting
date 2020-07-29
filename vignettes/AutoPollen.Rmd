@@ -32,7 +32,7 @@ Generell werden folgende Fragestellungen geklärt werden müssen:
 - Wird die maximale Pollenemission pro Tag durch die neuen Daten aufgeweicht?
 - Wie schnell sind Messwerte verfügbar?
 
-# Module und Code-Fragmente
+# Module und Code-Auszüge
 
 Die Pollen sind anhand des folgendes Schemas in COSMO-ART implementiert.
 
