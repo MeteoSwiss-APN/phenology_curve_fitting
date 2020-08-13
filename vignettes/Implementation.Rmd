@@ -98,7 +98,8 @@ data_hirst <- dwhget_surface(param_short = species$tag,
                              year = c(2020),
                              iso_country_cd = "CH") %>% 
   mutate(datetime = ymd_hm(datetime)) %>% 
-  mutate_if(is.character, ~as.factor(.))
+  mutate_if(is.character, ~as.factor(.)) %>% 
+  inner_join(species, by = c("param_short" = "tag"))
 
 ```
 
@@ -114,12 +115,23 @@ stations_subset <- map(c(4, 8, 12, 16), ~stations[(.x - 3):.x])
 
 map(stations_subset, ~data_hirst %>% 
   filter(nat_abbr %in% .x) %>% 
-  ggplot(aes(x = datetime, y = value, col = param_short)) +
+  ggplot(aes(x = datetime, y = value, col = name)) +
     geom_line() +
     coord_cartesian(ylim = c(0, 5000)) +
     facet_wrap(~nat_abbr))
 ```
 
+```{r}
+
+station <- "PPY" # Check stations vector for all available locations
+taxum <- "Betula" # Check species tibble for all available pollen taxa
+
+data_hirst %>% 
+  filter(name == taxum,
+         nat_abbr == station) %>% 
+  ggplot(aes(x = datetime, y = value, col = name)) +
+    geom_line()
+```
 
 
 
