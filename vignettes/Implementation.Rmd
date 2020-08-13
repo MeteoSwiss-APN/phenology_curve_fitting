@@ -18,6 +18,8 @@ knitr::opts_chunk$set(echo = FALSE,
 
 library(mchdwh)
 library(dplyr)
+library(lubridate)
+library(purrr)
 library(ggthemr)
 # devtools::install_github('cttobin/ggthemr')
 ggthemr("fresh")
@@ -31,7 +33,7 @@ The data is obtained from the DWH for the current pollen season (2020).
 
 ```{r}
 
-# Die following types are being measured:
+# The following types are being measured:
 # Erle - Alder - Aulne - Alnus
 # Birke - Birch - Bouleau - Betula
 # Gräser - Grasses - Graminées - Poaceae
@@ -93,9 +95,31 @@ species <- species_all %>%
 
 
 data_hirst <- dwhget_surface(param_short = species$tag,
-                             year = c(2020))
+                             year = c(2020),
+                             iso_country_cd = "CH") %>% 
+  mutate(datetime = ymd_hm(datetime)) %>% 
+  mutate_if(is.character, ~as.factor(.))
 
 ```
+
+# Time Series Plots
+
+```{r fig.height=9, fig.width=16}
+
+stations <- data_hirst$nat_abbr %>% 
+  unique %>% 
+  sort
+
+stations_subset <- map(c(4, 8, 12, 16), ~stations[(.x - 3):.x])
+
+map(stations_subset, ~data_hirst %>% 
+  filter(nat_abbr %in% .x) %>% 
+  ggplot(aes(x = datetime, y = value, col = param_short)) +
+    geom_line() +
+    coord_cartesian(ylim = c(0, 5000)) +
+    facet_wrap(~nat_abbr))
+```
+
 
 
 
