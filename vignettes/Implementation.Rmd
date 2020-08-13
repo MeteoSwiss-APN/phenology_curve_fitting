@@ -1,0 +1,144 @@
+---
+title: "Implementation"
+author: "Simon Adamov"
+date: "August 12, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE,
+                      fig.retina =3,
+                      fig.width = 10,
+                      fig.height = 7,
+                      out.width = "100%",
+                      out.height = "100%")
+
+library(mchdwh)
+library(dplyr)
+library(ggthemr)
+# devtools::install_github('cttobin/ggthemr')
+ggthemr("fresh")
+```
+
+# Data Import
+
+## Hirst Trap Measurements 2020 - All Stations
+
+The data is obtained from the DWH for the current pollen season (2020). 
+
+```{r}
+
+# Die following types are being measured:
+# Erle - Alder - Aulne - Alnus
+# Birke - Birch - Bouleau - Betula
+# Gräser - Grasses - Graminées - Poaceae
+# Ambrosia - Ragweed - Ambroisie - Ambrosia
+
+species_all <- tibble(
+  name = c(
+  "Castanea",
+  "Alnus",
+  "Ulmus",
+  "Cupressus",
+  "Fraxinus",
+  "Fagus",
+  "Juglans",
+  "Plantago",
+  "Corylus",
+  "Pinus",
+  "Quercus",
+  "Rumex",
+  "Platanus",
+  "Populus",
+  "Poaceae",
+  "Salix",
+  "Betula",
+  "Carpinus",
+  "Urtica",
+  "Taxus",
+  "Picea",
+  "Ambrosia"
+  ),
+  tag = c(
+  "kacasth0",
+  "kaalnuh0",
+  "kaulmuh0",
+  "kacuprh0",
+  "kafraxh0",
+  "kafaguh0",
+  "kajuglh0",
+  "khplanh0",
+  "kacoryh0",
+  "kapinuh0",
+  "kaquerh0",
+  "khrumeh0",
+  "kaplath0",
+  "kapopuh0",
+  "khpoach0",
+  "kasalih0",
+  "kabetuh0",
+  "kacarph0",
+  "khurtih0",
+  "kataxuh0",
+  "kapiceh0",
+  "khambrh0"
+  )
+)
+
+species <- species_all %>%
+  filter(name %in% c("Alnus", "Ambrosia", "Betula", "Poaceae"))
+
+
+data_hirst <- dwhget_surface(param_short = species$tag,
+                             year = c(2020))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
