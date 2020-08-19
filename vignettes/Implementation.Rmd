@@ -65,28 +65,28 @@ species_all <- tibble(
     "Ambrosia"
   ),
   tag = c(
-    "kacasth0",
-    "kaalnuh0",
-    "kaulmuh0",
-    "kacuprh0",
-    "kafraxh0",
-    "kafaguh0",
-    "kajuglh0",
-    "khplanh0",
-    "kacoryh0",
-    "kapinuh0",
-    "kaquerh0",
-    "khrumeh0",
-    "kaplath0",
-    "kapopuh0",
-    "khpoach0",
-    "kasalih0",
-    "kabetuh0",
-    "kacarph0",
-    "khurtih0",
-    "kataxuh0",
-    "kapiceh0",
-    "khambrh0"
+    "kacastz0",
+    "kaalnuz0",
+    "kaulmuz0",
+    "kacuprz0",
+    "kafraxz0",
+    "kafaguz0",
+    "kajuglz0",
+    "khplanz0",
+    "kacoryz0",
+    "kapinuz0",
+    "kaquerz0",
+    "khrumez0",
+    "kaplatz0",
+    "kapopuz0",
+    "khpoacz0",
+    "kasaliz0",
+    "kabetuz0",
+    "kacarpz0",
+    "khurtiz0",
+    "kataxuz0",
+    "kapicez0",
+    "khambrz0"
   )
 )
 
@@ -134,9 +134,18 @@ stations <-
   )
 
 
+# data_hirst <- dwhget_surface(param_short = species$tag,
+#                              year = c(2020),
+#                              iso_country_cd = "CH") %>% 
+#   mutate(datetime = ymd_hm(datetime)) %>% 
+#   mutate_if(is.character, ~as.factor(.)) %>% 
+#   inner_join(species, by = c("param_short" = "tag")) %>% 
+#   inner_join(stations, by = c("nat_abbr" = "tag"))
+
 data_hirst <- dwhget_surface(param_short = species$tag,
-                             year = c(2020),
-                             iso_country_cd = "CH") %>% 
+                                  meas_cat = 204,
+                                  year = c(2020),
+                                  iso_country_cd = "CH") %>% 
   mutate(datetime = ymd_hm(datetime)) %>% 
   mutate_if(is.character, ~as.factor(.)) %>% 
   inner_join(species, by = c("param_short" = "tag")) %>% 
