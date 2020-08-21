@@ -36,7 +36,7 @@ ggthemr("fresh")
 
 The data is obtained from the DWH for the current pollen season (2020). 
 
-```{r}
+```{r }
 
 # The following types are being measured:
 # Erle - Alder - Aulne - Alnus
@@ -138,6 +138,10 @@ stations <-
       )
   )
 
+
+```
+
+```{r eval = FALSE}
 # Loading the Data takes a long time and often fails when multiple years are retrieved.
 # data_hirst <- dwhget_surface(param_short = species$tag,
 #                                   meas_cat = 204,
@@ -153,11 +157,12 @@ stations <-
 load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 ```
 
+
 # Data Bias Correction
 
 The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer. The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
-```{r}
+```{r eval = FALSE}
 data_hirst<- data_hirst %>% 
   mutate(value_unbiased = value / 1.35)
 ```
@@ -168,7 +173,7 @@ There are no missing measurements.
 Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
 Are they being imputed before storing the data on the DWH?
 
-```{r }
+```{r  eval = FALSE}
 
 # This takes ~ 2minutes - visual representation of missing data
 # data_hirst %>% 
@@ -197,37 +202,21 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 01:00 – 24:00 (d.h. 00:00 – im DWH gibt es keinen Wert 24:00) UTC 
 
 
-```{r}
+```{r eval = FALSE}
 
 data_hirst <- data_hirst %>%
   mutate(date = date(datetime),
          hms = format(datetime, "%H:%M:%S"),
          hour = lag(hour(datetime), 1) + 1,
-         hour = ifelse(hour == 24, 0, hour),
-         date = if_else(hour == 0, date + days(1), date)) %>%   # This way they will be allocated to the next day
+         hour = ifelse(hour == 24, 0, hour))
+  
+data_hirst_window <- data_hirst %>% 
   filter(between(datetime, as_datetime("2017-03-02 00:10:00"), as_datetime("2020-08-19 00:00:00"))) # Only look at full days
 
-data_hourly <- data_hirst %>% 
-  group_by(taxon, commune, date, hour) %>% 
-  summarise(value = mean(value_unbiased)) %>% 
-  ungroup() %>% 
-  mutate(datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))))
-
-``` 
-
-```{r}
-
-# Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
-data_hourly_raw <- map(data_raw, ~.x %>% 
-  mutate(date = if_else(hour == 0, date + days(1), date)) %>%  # This way they will be allocated to the next day
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
-data_hourly <- set_na(data_hourly_raw)
-
-data_hours2_raw <- map(data_raw, ~.x %>% 
-  mutate(hms = format(datetime, "%H:%M:%S"),
-    hour = case_when(
+data_hourly <- data_hirst_window
+         
+data_2hours <- data_hirst_window %>%
+      mutate(hour = case_when(
       hms > "00:00:00" & hms <= "02:00:00" ~ 2,
       hms > "02:00:00" & hms <= "04:00:00" ~ 4,
       hms > "04:00:00" & hms <= "06:00:00" ~ 6,
@@ -240,18 +229,10 @@ data_hours2_raw <- map(data_raw, ~.x %>%
       hms > "18:00:00" & hms <= "20:00:00" ~ 20,
       hms > "20:00:00" & hms <= "22:00:00" ~ 22,
       hms > "22:00:00" | hms == "00:00:00" ~ 0 # For the next day already
-      ),
-    date = if_else(hour == 0, date + days(1), date) # This way they will be allocated to the next day
-  ) %>% 
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
+    ))
 
-data_hours2 <- set_na(data_hours2_raw)
-
-
-data_hours3_raw <- map(data_raw, ~.x %>% 
-  mutate(hms = format(datetime, "%H:%M:%S"),
+data_3hours <- data_hirst_window %>%
+  mutate(
     hour = case_when(
       hms > "00:00:00" & hms <= "03:00:00" ~ 3,
       hms > "03:00:00" & hms <= "06:00:00" ~ 6,
@@ -261,60 +242,47 @@ data_hours3_raw <- map(data_raw, ~.x %>%
       hms > "15:00:00" & hms <= "18:00:00" ~ 18,
       hms > "18:00:00" & hms <= "21:00:00" ~ 21,
       hms > "21:00:00" | hms == "00:00:00" ~ 0 # For the next day already
-      ),
-    date = if_else(hour == 0, date + days(1), date) # This way they will be allocated to the next day
-  ) %>% 
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
+    ))
 
-data_hours3 <- set_na(data_hours3_raw)
-
-data_hours6_raw <- map(data_raw, ~.x %>% 
-  mutate(hms = format(datetime, "%H:%M:%S"),
+data_6hours <- data_hirst_window %>%
+  mutate(
     hour = case_when(
       hms > "00:00:00" & hms <= "06:00:00" ~ 6,
       hms > "06:00:00" & hms <= "12:00:00" ~ 12,
       hms > "12:00:00" & hms <= "18:00:00" ~ 18,
-      hms > "18:00:00" | hms == "00:00:00" ~ 0
-    ),
-    date = if_else(hour == 0, date + days(1), date)
-  ) %>% 
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
+      hms > "18:00:00" | hms == "00:00:00" ~ 0 # For the next day already
+    ))
 
-data_hours6 <- set_na(data_hours6_raw)
-
-data_hours12_raw <- map(data_raw, ~.x %>% 
-  mutate(hms = format(datetime, "%H:%M:%S"),
+data_12hours <- data_hirst_window %>%
+  mutate(
     hour = case_when(
       hms > "00:00:00" & hms <= "12:00:00" ~ 12,
-      hms > "12:00:00" | hms == "00:00:00" ~ 0
-    ),
-    date = if_else(hour == 0, date + days(1), date)
-  )  %>% 
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
+      hms > "12:00:00" | hms == "00:00:00" ~ 0 # For the next day already
+    ))
 
-data_hours12 <- set_na(data_hours12_raw)
+data <- map(list(data_hourly, data_2hours, data_3hours, data_6hours, data_12hours), ~.x %>% 
+  mutate(date = if_else(hour == 0 & hms != "00:00:00", date + days(1), date)) %>% # This way they will be allocated to the next day
+  group_by(taxon, commune, date, hour) %>% 
+  summarise(value = mean(value_unbiased)) %>% 
+  ungroup() %>% 
+  mutate(datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00")))))
 
-data_daily_raw <- map(data_hourly_raw, ~.x %>% 
-                    mutate(date = if_else(hour == 0, date - days(1), date)) %>% 
-                    group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-                    mutate(hour = 23) %>% # Random hour here 
-                    ungroup())
+data[[6]] <- data[[1]] %>% 
+  group_by(date, commune, taxon) %>% 
+  summarise(value = mean(value)) %>% 
+  ungroup() %>% 
+  mutate(datetime = date,
+         hour = 00:00)
 
-data_daily <- set_na(data_daily_raw)
+names(data) <- c("data_hourly", "data_2hours", "data_3hours", "data_6hours", "data_12hours", "data_daily")
 
-data_daily_raw <- map(data_daily_raw, ~.x %>% 
-  mutate(hour = 23,
-         timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":59")))))
+# save(data, file = paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
+  
+``` 
 
+```{r}
+load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 ```
-
 
 
 # Time Series Plots
@@ -325,11 +293,11 @@ stations_subset <- map(c(4, 8, 12, 16), ~stations %>%
                          slice((.x - 3):.x) %>% 
                          pull(commune))
 
-map(stations_subset, ~data_hourly %>% 
+map(stations_subset, ~data$data_daily %>% 
   filter(commune %in% .x) %>% 
   ggplot(aes(x = datetime, y = value, col = taxon)) +
     geom_line() +
-    coord_cartesian(ylim = c(0, 5000)) +
+    # coord_cartesian(ylim = c(0, 5000)) +
     labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
        x = "") +
   scale_colour_discrete("") +
@@ -342,7 +310,7 @@ map(stations_subset, ~data_hourly %>%
 commune <- "Payerne" # Check stations tibble for all available locations
 taxon <- "Betula" # Check species tibble for all available pollen taxa
 
-data_hourly %>% 
+data$data_daily %>% 
   filter(taxon == taxon,
          commune == commune) %>% 
   ggplot(aes(x = datetime, y = value, col = taxon)) +
