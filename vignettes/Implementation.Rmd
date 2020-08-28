@@ -16,11 +16,15 @@ knitr::opts_chunk$set(echo = FALSE,
                       out.width = "100%",
                       out.height = "100%")
 
+
 library(mchdwh)
 library(dplyr)
+library(readr)
+library(tidyr)
 library(lubridate)
 library(purrr)
 
+# remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
 # library(Amelia)
 # remotes::install_version("foreign", version = "0.8-71")
@@ -34,7 +38,9 @@ ggthemr("fresh")
 
 # Data Import
 
+
 The data is obtained from the DWH for the current pollen season (2020). 
+The Model Data from COSMO-ART is available on tsa (CSCS) in /store.
 
 ```{r }
 
@@ -69,7 +75,7 @@ species_all <- tibble(
     "Picea",
     "Ambrosia"
   ),
-  tag = c(
+  hirst_taxon = c(
     "kacastz0",
     "kaalnuz0",
     "kaulmuz0",
@@ -92,6 +98,30 @@ species_all <- tibble(
     "kataxuz0",
     "kapicez0",
     "khambrz0"
+  ),
+  cosmo_taxon = c(
+    NA_character_,
+    "ALNU",
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    "POAC",
+    NA_character_,
+    "BETU",
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    NA_character_,
+    "AMBR"
   )
 )
 
@@ -100,7 +130,7 @@ species <- species_all %>%
 
 stations <-
   tibble(
-    tag = c(
+    hirst_station = c(
       "PDS",
       "PBU",
       "PMU",
@@ -108,17 +138,17 @@ stations <-
       "PZH",
       "PLZ",
       "PBE",
-      "PPY",
+      # "PPY",
       "PNE",
       "PVI",
       "PLS",
       "PGE",
       "PCF",
       "PLO",
-      "BLR",
+      # "BLR",
       "PLU"
     ),
-    commune = c(
+    station = c(
       "Wolfgang",
       "Buchs",
       "Münsterlingen",
@@ -126,39 +156,79 @@ stations <-
       "Zürich",
       "Luzern",
       "Bern",
-      "Payerne",
+      # "Payerne",
       "Neuchâtel",
       "Visp",
       "Lausanne",
       "Genève",
       "La-Chaux-de-Fonds",
       "Locarno",
-      "Balerna",
+      # "Balerna",
       "Lugano"
-      )
+      ),
+    cosmo_station = c(
+      "CHDAVO",
+      "CHBUCH",
+      "CHMUEN",
+      "CHBASE",
+      "CHZUER",
+      "CHLUZE",
+      "CHBERN",
+      # NA_character_,
+      "CHNEUC",
+      "CHVISP",
+      "CHLAUS",
+      "CHGENE",
+      "CHLACH",
+      "CHLOCA",
+      # NA_character_,
+      "CHLUGA"
+    )
   )
-
 
 ```
 
+## Measurements
 ```{r eval = FALSE}
 # Loading the Data takes a long time and often fails when multiple years are retrieved.
-# data_hirst <- dwhget_surface(param_short = species$tag,
+# data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
 #                                   meas_cat = 204,
 #                                   year = 2016:2020,
-#                                   iso_country_cd = "CH") %>% 
-#   mutate(datetime = ymd_hm(datetime)) %>% 
-#   mutate_if(is.character, ~as.factor(.)) %>% 
-#   inner_join(species, by = c("param_short" = "tag")) %>% 
-#   inner_join(stations, by = c("nat_abbr" = "tag"))
-# 
+#                                   iso_country_cd = "CH") %>%
+#   mutate(datetime = ymd_hm(datetime),
+#   type = "Hirst") %>%
+#   mutate_if(is.character, ~as.factor(.)) %>%
+#   select(-param_short, -nat_abbr) %>% 
+#   inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
+#   inner_join(stations, by = c("nat_abbr" = "hirst_taxon"))
+
 # save(data_hirst, file = paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
 load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
+
+```
+
+## Model COSMO-ART
+
+```{r}
+data_cosmo <- read_delim(paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv"), delim = " ", skip = 17, col_names = TRUE, trim_ws = TRUE) %>% 
+  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>% # setting na during import failed for some reason 
+  pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%  
+  inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>% 
+  inner_join(stations, by = c("station_tag" = "cosmo_station")) %>% 
+  mutate(datetime = ymd_h(paste0(YYYY, sprintf("%02d", MM), sprintf("%02d", DD), sprintf("%02d", hh))),
+         date = date(datetime),
+         hour = hour(datetime),
+         type = "Cosmo") %>% 
+  # filter(between(datetime, as_datetime("2017-03-02 00:01:00"), as_datetime("2020-08-19 00:00:00"))) %>% 
+  select(taxon, station, date, hour, value, datetime, type)
+  
+
 ```
 
 
 # Data Bias Correction
+## Measurements
 
 The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer. The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
@@ -168,6 +238,7 @@ data_hirst<- data_hirst %>%
 ```
 
 # Missing Data and Imputation
+## Measurements
 
 There are no missing measurements.
 Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
@@ -187,8 +258,17 @@ summary(data_hirst)
 
 ```
 
+## Model COSMO-ART
+
+```{r}
+data_cosmo %>% 
+  summarise_all(~sum(is.na(.)))
+
+summary(data_cosmo)
+```
 
 # Temporal Aggregation
+## Measurements
 
 There are some general guidelines from Regula Gehrig on how to average concentration that should be followed here.
 
@@ -262,21 +342,23 @@ data_12hours <- data_hirst_window %>%
 
 data <- map(list(data_hourly, data_2hours, data_3hours, data_6hours, data_12hours), ~.x %>% 
   mutate(date = if_else(hour == 0 & hms != "00:00:00", date + days(1), date)) %>% # This way they will be allocated to the next day
-  group_by(taxon, commune, date, hour) %>% 
+  group_by(taxon, station, date, hour, type) %>% 
   summarise(value = mean(value_unbiased)) %>% 
   ungroup() %>% 
-  mutate(datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00")))))
+  mutate(datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00")))) %>% 
+  select(taxon, station, date, hour, value, datetime, type))
 
 data[[6]] <- data[[1]] %>% 
-  group_by(date, commune, taxon) %>% 
+  group_by(date, station, taxon, type) %>% 
   summarise(value = mean(value)) %>% 
   ungroup() %>% 
   mutate(datetime = date,
-         hour = 00:00)
+         hour = 00:00) %>% 
+  select(taxon, station, date, hour, value, datetime, type)
 
 names(data) <- c("data_hourly", "data_2hours", "data_3hours", "data_6hours", "data_12hours", "data_daily")
 
-# save(data, file = paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
+save(data, file = paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
   
 ``` 
 
@@ -289,36 +371,44 @@ load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 
 ```{r fig.height=9, fig.width=16}
 stations_subset <- map(c(4, 8, 12, 16), ~stations %>% 
-                         arrange(commune) %>% 
+                         arrange(station) %>% 
                          slice((.x - 3):.x) %>% 
-                         pull(commune))
+                         pull(station))
 
 map(stations_subset, ~data$data_daily %>% 
-  filter(commune %in% .x) %>% 
+  filter(station %in% .x) %>% 
   ggplot(aes(x = datetime, y = value, col = taxon)) +
     geom_line() +
     # coord_cartesian(ylim = c(0, 5000)) +
     labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
        x = "") +
   scale_colour_discrete("") +
-    facet_wrap(~commune))
+    facet_wrap(~station))
 ```
 
 
 ```{r}
 
-commune <- "Payerne" # Check stations tibble for all available locations
-taxon <- "Betula" # Check species tibble for all available pollen taxa
+stations_selected <- "Zürich" # Check stations tibble for all available locations
+taxa_selected <- c("Alnus", "Betula", "Poaceae") # Check species tibble for all available pollen taxa
 
-data$data_daily %>% 
-  filter(taxon == taxon,
-         commune == commune) %>% 
-  ggplot(aes(x = datetime, y = value, col = taxon)) +
+data$data_hourly %>% 
+  filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+  bind_rows(data_cosmo) %>% 
+  filter(taxon %in% taxa_selected,
+         station %in% stations_selected) %>% 
+  group_by(type, taxon, date, station) %>% 
+  summarise(value = mean(value, na.rm = TRUE)) %>% 
+  ungroup %>% 
+  ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
     geom_line(alpha = 0.6) +
-    ggtitle(paste("Hourly Pollen Concentrations in", commune)) +
+    ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Concentrations in", stations_selected)) +
   labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
-       x = "") +
-  scale_colour_discrete("")
+       x = "2020 Season") +
+  scale_colour_discrete("Species") +
+  scale_linetype_discrete("Data") +
+  coord_cartesian(xlim = c(ymd("2020-02-01"), ymd("2020-07-01")),
+                  ylim = c(0, 3000)) 
 ```
 
 
