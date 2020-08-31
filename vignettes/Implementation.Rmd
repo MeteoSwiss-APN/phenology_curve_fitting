@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = FALSE,
 
 
 library(mchdwh)
+library(ROracle)
 library(dplyr)
 library(readr)
 library(tidyr)
@@ -201,9 +202,9 @@ data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
   type = "Hirst",
   measurement = "concentration") %>%
   mutate_if(is.character, ~as.factor(.)) %>%
-  select(-param_short, -nat_abbr) %>%
   inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
-  inner_join(stations, by = c("nat_abbr" = "hirst_taxon"))
+  inner_join(stations, by = c("nat_abbr" = "hirst_station")) %>% 
+  select(-param_short, -nat_abbr)
 
 # save(data_hirst, file = paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
@@ -348,19 +349,19 @@ data_12hours <- data_hirst_window %>%
 
 data <- map(list(data_hourly, data_2hours, data_3hours, data_6hours, data_12hours), ~.x %>% 
   mutate(date = if_else(hour == 0 & hms != "00:00:00", date + days(1), date)) %>% # This way they will be allocated to the next day
-  group_by(taxon, station, date, hour, type) %>% 
+  group_by(taxon, station, date, hour, type, measurement) %>% 
   summarise(value = mean(value_unbiased)) %>% 
   ungroup() %>% 
   mutate(datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00")))) %>% 
-  select(taxon, station, date, hour, value, datetime, type))
+  select(taxon, station, date, hour, value, datetime, type, measurement))
 
 data[[6]] <- data[[1]] %>% 
-  group_by(date, station, taxon, type) %>% 
+  group_by(date, station, taxon, type, measurement) %>% 
   summarise(value = mean(value)) %>% 
   ungroup() %>% 
   mutate(datetime = date,
          hour = 00:00) %>% 
-  select(taxon, station, date, hour, value, datetime, type)
+  select(taxon, station, date, hour, value, datetime, type, measurement)
 
 names(data) <- c("data_hourly", "data_2hours", "data_3hours", "data_6hours", "data_12hours", "data_daily")
 
@@ -392,6 +393,7 @@ map(stations_subset, ~data$data_daily %>%
     facet_wrap(~station))
 ```
 
+## Comparison with COSMO Data
 
 ```{r fig.height=6, fig.width=9}
 
@@ -404,16 +406,17 @@ for (s in stations$station %>% sort){
     filter(datetime >= ymd_h("2020-01-01 00")) %>% 
     bind_rows(data_cosmo) %>% 
     filter(taxon %in% taxa_selected,
-           station %in% s) %>% 
+           station %in% s,
+           measurement == "concentration") %>% 
     group_by(type, taxon, date, station) %>%
     summarise(value = mean(value, na.rm = TRUE)) %>%
     ungroup 
   
   large_diffs <- data_timeseries %>%
     pivot_wider(names_from = type) %>% 
-    mutate(diff = hirst - Cosmo,
-           mean_pol = (hirst + Cosmo) / 2,
-           large_diff = if_else(hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2), date, NA_Date_)) %>% 
+    mutate(diff = Hirst - Cosmo,
+           mean_pol = (Hirst + Cosmo) / 2,
+           large_diff = if_else(Hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2), date, as.Date(NA))) %>% 
     pull(large_diff) %>% 
     unique()
   
