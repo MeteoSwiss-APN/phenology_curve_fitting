@@ -22,9 +22,9 @@ library(dplyr)
 library(readr)
 library(tidyr)
 library(purrr)
+library(stringr)
 library(lubridate)
 library(tsibble)
-library(feasts)
 
 # remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
@@ -193,20 +193,21 @@ stations <-
 ## Measurements
 ```{r eval = FALSE}
 # Loading the Data takes a long time and often fails when multiple years are retrieved.
-# data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
-#                                   meas_cat = 204,
-#                                   year = 2016:2020,
-#                                   iso_country_cd = "CH") %>%
-#   mutate(datetime = ymd_hm(datetime),
-#   type = "Hirst") %>%
-#   mutate_if(is.character, ~as.factor(.)) %>%
-#   select(-param_short, -nat_abbr) %>% 
-#   inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
-#   inner_join(stations, by = c("nat_abbr" = "hirst_taxon"))
+data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
+                                  meas_cat = 204,
+                                  year = 2020,
+                                  iso_country_cd = "CH") %>%
+  mutate(datetime = ymd_hm(datetime),
+  type = "Hirst",
+  measurement = "concentration") %>%
+  mutate_if(is.character, ~as.factor(.)) %>%
+  select(-param_short, -nat_abbr) %>%
+  inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
+  inner_join(stations, by = c("nat_abbr" = "hirst_taxon"))
 
 # save(data_hirst, file = paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
-load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
+# load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
 ```
 
@@ -216,6 +217,9 @@ load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 data_cosmo <- read_delim(paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv"), delim = " ", skip = 17, col_names = TRUE, trim_ws = TRUE) %>% 
   mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>% # setting na during import failed for some reason 
   pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%  
+  mutate(measurement = case_when(str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
+                                 str_detect(PARAMETER, pattern = "fe") ~ "emission",
+                                 TRUE ~ "concentration")) %>% 
   inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>% 
   inner_join(stations, by = c("station_tag" = "cosmo_station")) %>% 
   mutate(datetime = ymd_h(paste0(YYYY, sprintf("%02d", MM), sprintf("%02d", DD), sprintf("%02d", hh))),
@@ -223,8 +227,7 @@ data_cosmo <- read_delim(paste0(here::here(), "/vignettes/ext-data/mod_pollen_20
          hour = hour(datetime),
          type = "Cosmo") %>% 
   # filter(between(datetime, as_datetime("2017-03-02 00:01:00"), as_datetime("2020-08-19 00:00:00"))) %>% 
-  select(taxon, station, date, hour, value, datetime, type)
-  
+  select(taxon, station, date, hour, value, datetime, type, measurement)
 
 ```
 
@@ -408,8 +411,10 @@ for (s in stations$station %>% sort){
   large_diffs <- data_timeseries %>%
     pivot_wider(names_from = type) %>% 
     mutate(diff = hirst - Cosmo,
-           large_diff = if_else(hirst > 20 & ((abs(diff) + hirst) / hirst > 2), date, NA_Date_)) %>% 
-    pull(large_diff)
+           mean_pol = (hirst + Cosmo) / 2,
+           large_diff = if_else(hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2), date, NA_Date_)) %>% 
+    pull(large_diff) %>% 
+    unique()
   
   gg_timeseries[[s]] <- data_timeseries %>% 
     ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
