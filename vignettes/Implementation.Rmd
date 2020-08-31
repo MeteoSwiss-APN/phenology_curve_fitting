@@ -219,7 +219,8 @@ data_cosmo <- read_delim(paste0(here::here(), "/vignettes/ext-data/mod_pollen_20
   pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%  
   mutate(measurement = case_when(str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
                                  str_detect(PARAMETER, pattern = "fe") ~ "emission",
-                                 TRUE ~ "concentration")) %>% 
+                                 TRUE ~ "concentration"),
+         PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")) %>% 
   inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>% 
   inner_join(stations, by = c("station_tag" = "cosmo_station")) %>% 
   mutate(datetime = ymd_h(paste0(YYYY, sprintf("%02d", MM), sprintf("%02d", DD), sprintf("%02d", hh))),
