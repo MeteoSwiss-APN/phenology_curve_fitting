@@ -26,6 +26,8 @@ library(purrr)
 library(stringr)
 library(lubridate)
 library(tsibble)
+library(feasts)
+library(fabletools)
 
 # remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
@@ -445,7 +447,7 @@ In the following we will investigate the auto-correlation of the poleno pollen m
 
 ts_autocorr_tb <- data$data_hourly %>% 
   mutate(value = if_else(is.na(value), 0, value),
-       value = log(value + 1)) %>% 
+         value = log(value + 1)) %>% 
   filter(taxon == "Poaceae",
          station == "Zürich",
          value > 0) %>% 
@@ -481,6 +483,62 @@ ts_autocorr_tb %>%
   # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
   labs(x = "", y = "") +
   facet_wrap(~ lag)
+
+
+# Decomposition: As we are only looking at one year of data, decomposition into trend and seasonal effect makes little sense. This would be an interesting exercise for the future though, once we have multiple years of collected Poleno Data. Actually, there might be daily "seasonal" effects that we can filter out. Let's try :-)
+
+dcmp <- ts_autocorr %>% 
+  tsibble::fill_gaps() %>% 
+  mutate(value = if_else(is.na(value), 0, value)) %>% 
+  model(STL(value ~ season(window = 24)))
+dcmp_components <- components(dcmp)
+dcmp_components %>% autoplot()
+
+# ACF
+
+poleno_acf <- acf(ts_autocorr_tb$value, plot = FALSE, lag.max = 60)
+poleno_acf_df <- with(poleno_acf, data.frame(lag, acf)) %>% slice(-1)
+conf_level <- 0.95
+ciline <- qnorm((1 - conf_level) / 2) / sqrt(nrow(ts_autocorr_tb))
+
+ggplot(data = poleno_acf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% ACF(value) %>% autoplot()
+
+# PACF
+
+poleno_pacf <- pacf(ts_autocorr_tb$value, plot = FALSE, lag.max = 60)
+poleno_pacf_df <- with(poleno_pacf, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_pacf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% PACF(value) %>% autoplot()
 
 ```
 
