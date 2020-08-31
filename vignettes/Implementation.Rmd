@@ -21,8 +21,10 @@ library(mchdwh)
 library(dplyr)
 library(readr)
 library(tidyr)
-library(lubridate)
 library(purrr)
+library(lubridate)
+library(tsibble)
+library(feasts)
 
 # remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
@@ -369,7 +371,7 @@ load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 
 # Time Series Plots
 
-```{r fig.height=9, fig.width=16}
+```{r fig.height=9, fig.width=16, eval = FALSE}
 stations_subset <- map(c(4, 8, 12, 16), ~stations %>% 
                          arrange(station) %>% 
                          slice((.x - 3):.x) %>% 
@@ -387,33 +389,91 @@ map(stations_subset, ~data$data_daily %>%
 ```
 
 
-```{r}
+```{r fig.height=6, fig.width=9}
 
-stations_selected <- "Zürich" # Check stations tibble for all available locations
-taxa_selected <- c("Alnus", "Betula", "Poaceae") # Check species tibble for all available pollen taxa
+# stations_selected <- "Zürich" # Check stations tibble for all available locations
+taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tibble for all available pollen taxa
+gg_timeseries <- list()
 
-data$data_hourly %>% 
-  filter(datetime >= ymd_h("2020-01-01 00")) %>% 
-  bind_rows(data_cosmo) %>% 
-  filter(taxon %in% taxa_selected,
-         station %in% stations_selected) %>% 
-  group_by(type, taxon, date, station) %>% 
-  summarise(value = mean(value, na.rm = TRUE)) %>% 
-  ungroup %>% 
-  ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
-    geom_line(alpha = 0.6) +
-    ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Concentrations in", stations_selected)) +
-  labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
-       x = "2020 Season") +
-  scale_colour_discrete("Species") +
-  scale_linetype_discrete("Data") +
-  coord_cartesian(xlim = c(ymd("2020-02-01"), ymd("2020-07-01")),
-                  ylim = c(0, 3000)) 
+for (s in stations$station %>% sort){
+  data_timeseries <- data$data_hourly %>% 
+    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+    bind_rows(data_cosmo) %>% 
+    filter(taxon %in% taxa_selected,
+           station %in% s) %>% 
+    group_by(type, taxon, date, station) %>%
+    summarise(value = mean(value, na.rm = TRUE)) %>%
+    ungroup 
+  
+  large_diffs <- data_timeseries %>%
+    pivot_wider(names_from = type) %>% 
+    mutate(diff = hirst - Cosmo,
+           large_diff = if_else(hirst > 20 & ((abs(diff) + hirst) / hirst > 2), date, NA_Date_)) %>% 
+    pull(large_diff)
+  
+  gg_timeseries[[s]] <- data_timeseries %>% 
+    ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
+      geom_line(alpha = 0.6) +
+      geom_vline(xintercept = large_diffs, alpha = 0.1, col = swatch()[1], size = 1) +
+      ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Concentrations in", s)) +
+    labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
+         x = "2020 Season") +
+    scale_colour_discrete("Species") +
+    scale_linetype_discrete("Data") +
+    coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+                    ylim = c(0, 2000)) 
+}
+
+gg_timeseries
+
 ```
 
+# Auto-Correlation
 
+In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
 
+```{r fig.height=10, fig.width=10}
 
+ts_autocorr_tb <- data$data_hourly %>% 
+  mutate(value = if_else(is.na(value), 0, value),
+       value = log(value + 1)) %>% 
+  filter(taxon == "Poaceae",
+         station == "Zürich",
+         value > 0) %>% 
+  select(datetime, value)
+
+ts_autocorr <- as_tsibble(ts_autocorr_tb, regular = TRUE, index = datetime)
+
+# Timeseries Plot
+
+ts_autocorr_tb %>%
+  ggplot(aes(x = datetime, y = value)) +
+  geom_line() +
+  ggtitle("Poaceae Pollen Concentrations for Hourly Intervals") +
+  labs(x = "Date", y = paste0("Pollen Concentration [m⁻³]"))
+
+# Index-Plot from ANOVA Residuals
+
+# Lagged Scatterplot
+
+ts_autocorr_tb %>% 
+  mutate(lag01 = lag(value, 1),
+         lag02 = lag(value, 2),
+         lag04 = lag(value, 4),
+         lag06 = lag(value, 6),
+         lag12 = lag(value, 12),
+         lag24 = lag(value, 24),
+         lag48 = lag(value, 48),
+         lag72 = lag(value, 72),
+         lag96 = lag(value, 96)) %>% 
+  pivot_longer(cols = lag01:lag96, names_to = "lag", values_to = "lagged_value") %>%
+  ggplot(aes(x = value, y = lagged_value)) +
+  geom_point(alpha = 0.2) +
+  # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
+  labs(x = "", y = "") +
+  facet_wrap(~ lag)
+
+```
 
 
 
