@@ -24,6 +24,7 @@ library(readr)
 library(tidyr)
 library(purrr)
 library(stringr)
+library(scales)
 library(lubridate)
 library(tsibble)
 library(feasts)
@@ -396,6 +397,7 @@ map(stations_subset, ~data$data_daily %>%
 ```
 
 ## Comparison with COSMO Data
+### Concentrations
 
 ```{r fig.height=6, fig.width=9}
 
@@ -436,6 +438,76 @@ for (s in stations$station %>% sort){
 }
 
 gg_timeseries
+
+```
+
+### Phenology
+
+```{r fig.height=6, fig.width=9}
+
+# stations_selected <- "Zürich" # Check stations tibble for all available locations
+taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tibble for all available pollen taxa
+gg_pheno <- list()
+
+for (s in stations$station %>% sort){
+  gg_pheno[[s]] <- data$data_hourly %>% 
+    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+    bind_rows(data_cosmo) %>% 
+    filter(taxon %in% taxa_selected,
+           station %in% s,
+           measurement == "concentration" & type == "Hirst" | measurement == "phenology" & type == "Cosmo") %>% 
+    group_by(type, taxon, date, station) %>%
+    summarise(value = mean(value, na.rm = TRUE)) %>%
+    ungroup %>% 
+    group_by(type) %>% 
+    mutate(value = rescale(value, to = c(0, 100))) %>% 
+    ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
+      geom_line(alpha = 0.6) +
+      ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Phenology in", s)) +
+      labs(y = expression(paste("Pollen Phenology")),
+         x = "2020 Season") +
+      scale_colour_discrete("Species") +
+      scale_linetype_discrete("Data") +
+      coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+                      ylim = c(0, 100)) 
+}
+
+gg_pheno
+
+```
+
+### Emission Flux
+
+```{r fig.height=6, fig.width=9}
+
+# stations_selected <- "Zürich" # Check stations tibble for all available locations
+taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tibble for all available pollen taxa
+gg_emiss <- list()
+
+for (s in stations$station %>% sort){
+  gg_emiss[[s]] <- data$data_hourly %>% 
+    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+    bind_rows(data_cosmo) %>% 
+    filter(taxon %in% taxa_selected,
+           station %in% s,
+           measurement == "concentration" & type == "Hirst" | measurement == "emission" & type == "Cosmo") %>% 
+    group_by(type, taxon, date, station) %>%
+    summarise(value = mean(value, na.rm = TRUE)) %>%
+    ungroup %>% 
+    group_by(type) %>% 
+    mutate(value = rescale(value, to = c(0, 100))) %>% 
+    ggplot(aes(x = date, y = value, col = taxon, lty = type)) +
+      geom_line(alpha = 0.6) +
+      ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Emission Flux in", s)) +
+      labs(y = expression(paste("Pollen Emission Flux")),
+         x = "2020 Season") +
+      scale_colour_discrete("Species") +
+      scale_linetype_discrete("Data") +
+      coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+                      ylim = c(0, 100)) 
+}
+
+gg_emiss
 
 ```
 
