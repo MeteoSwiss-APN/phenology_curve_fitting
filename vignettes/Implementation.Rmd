@@ -29,6 +29,14 @@ library(lubridate)
 library(tsibble)
 library(feasts)
 library(fabletools)
+library(kableExtra)
+library(ggpubr)
+# These themes just look great :-)
+library(ggthemr)
+# devtools::install_github('cttobin/ggthemr')
+ggthemr("fresh")
+
+devtools::load_all(".")
 
 # remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
@@ -36,10 +44,7 @@ library(fabletools)
 # remotes::install_version("foreign", version = "0.8-71")
 # install.packages("Amelia")
 
-# These themes just look great :-)
-library(ggthemr)
-# devtools::install_github('cttobin/ggthemr')
-ggthemr("fresh")
+
 ```
 
 # Data Import
@@ -378,6 +383,68 @@ load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 
 
 # Time Series Plots
+
+```{r}
+data_hourly_comb <- data$data_hourly %>% 
+    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+    bind_rows(data_cosmo) 
+
+data_daily_comb <- data_hourly_comb %>% 
+  group_by(taxon, station, date, type) %>% 
+  summarise(value = mean(value, na.rm = TRUE)) %>% 
+  ungroup %>% 
+  mutate(hour = 0,
+         # date = date + days(1), # Depends on the definition
+         datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))))
+```
+
+
+```{r }
+
+# gg_comparison <- plot_hirst(species = species, resolution = resolution, rm_zeros = TRUE, combined = TRUE)
+
+plot_comb(combined = TRUE, taxon = "Alnus", station = "Bern", resolution = "Daily", rm_zeros = FALSE)
+
+```
+
+
+```{r }
+
+occurence <- data_daily_comb %>% 
+  group_by(taxon, station, type) %>% 
+  summarise(value = sum(value != 0, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(metric = "occurence")
+
+maximum <- data_daily_comb %>% 
+  group_by(taxon, station, type) %>% 
+  summarise(value = max(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(metric = "maximum")
+
+average <- data_daily_comb %>% 
+  group_by(taxon, station, type) %>% 
+  summarise(value = mean(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(metric = "average")
+
+spi <- data_daily_comb %>% 
+  group_by(taxon, station, type) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(metric = "spi")
+
+metrics <- bind_rows(occurence,
+                  maximum,
+                  average,
+                  spi)
+
+create_kable(occurence, title = "Occurence of Pollen [Days]")
+create_kable(maximum, title = "Maximum Pollen Concentration [m⁻³]")
+create_kable(average, title = "Average Pollen Concentration [m⁻³]")
+create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
+
+```
 
 ```{r fig.height=9, fig.width=16, eval = FALSE}
 stations_subset <- map(c(4, 8, 12, 16), ~stations %>% 
