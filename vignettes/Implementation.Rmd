@@ -199,7 +199,7 @@ stations <-
 # Loading the Data takes a long time and often fails when multiple years are retrieved.
 data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
                                   meas_cat = 204,
-                                  year = 2020,
+                                  year = 2017:2020,
                                   iso_country_cd = "CH") %>%
   mutate(datetime = ymd_hm(datetime),
   type = "Hirst",
