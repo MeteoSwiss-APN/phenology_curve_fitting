@@ -38,6 +38,11 @@ ggthemr("fresh")
 
 devtools::load_all(".")
 
+library(conflicted)
+conflict_prefer(name = "select", winner = "dplyr")
+conflict_prefer(name = "filter", winner = "dplyr")
+conflict_prefer(name = "rescale", winner = "scales")
+
 # remotes::install_version("caTools", version = "1.17.1.1")
 # This library is needed for visual representation of missing data
 # library(Amelia)
@@ -463,8 +468,7 @@ map(stations_subset, ~data$data_daily %>%
     facet_wrap(~station))
 ```
 
-## Comparison with COSMO Data
-### Concentrations
+## Concentrations
 
 ```{r fig.height=6, fig.width=9}
 
@@ -508,7 +512,7 @@ gg_timeseries
 
 ```
 
-### Phenology
+## Phenology
 
 ```{r fig.height=6, fig.width=9}
 
@@ -543,7 +547,7 @@ gg_pheno
 
 ```
 
-### Emission Flux
+## Emission Flux
 
 ```{r fig.height=6, fig.width=9}
 
@@ -575,6 +579,108 @@ for (s in stations$station %>% sort){
 }
 
 gg_emiss
+
+```
+
+# Correlation
+
+The correlation between the measurements and modeled data can be calculated easily.
+As we are only comparing two sets of data, mutliple testing is not a problem here.
+
+Careful the correlation coefficients method have some serious shortcomings:
+
+The correlation coefficient measures linear agreement--whether the measurements go up-and-down together. Certainly, we want the measures to go up-and-down together, but the correlation coefficient itself is deficient in at least three ways as a measure of agreement. (http://www.jerrydallal.com/LHSP/compare.htm)
+
+- The correlation coefficient can be close to 1 (or equal to 1!) even when there is considerable bias between the two methods. For example, if one method gives measurements that are always 10 units higher than the other method, the correlation will be 1 exactly, but the measurements will always be 10 units apart.
+- The magnitude of the correlation coefficient is affected by the range of subjects/units studied. The correlation coefficient can be made smaller by measuring samples that are similar to each other and larger by measuring samples that are very different from each other. The magnitude of the correlation says nothing about the magnitude of the differences between the paired measurements which, when you get right down to it, is all that really matters.
+- The usual significance test involving a correlation coefficient-- whether the population value is 0--is irrelevant to the comparability problem. What is important is not merely that the correlation coefficient be different from 0. Rather, it should be close to (ideally, equal to) 1! 
+
+## Pearson, Spearman and Kendall Correlation
+
+A good summary of the methods and their shortcomings can be found here: https://www.statisticssolutions.com/correlation-Pearson-Kendall-spear man/
+
+Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the two sets of data.
+
+```{r}
+
+methods <- c("pearson", "spearman", "kendall")
+
+data_corr <- data_daily_comb %>% 
+  mutate(value = log10(value + 1)) %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
+  select(value, type, datetime, station, taxon) %>% 
+  pivot_wider(names_from = type, values_from = value)
+
+corr_matrix <- map(methods, ~corr.test(
+  data_corr %>% select(-datetime, -station, -taxon),
+  use = "complete",
+  method = .x,
+  # adjust = "holm",
+  alpha = .05,
+  ci = TRUE,
+  minlength = 5
+  ))
+
+```
+
+```{r }
+ggthemr("fresh")
+ci <- map(corr_matrix, ~.x %>% 
+  pluck(10)) %>% 
+  bind_rows() %>% 
+  round(2) %>% 
+  mutate(method = methods,
+         metric = c("R-", "rho-", "tau-"),
+         ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
+         x = rep(1, times = 3),
+         y = c(3.75, 3.5, 3.25))
+
+gg_corr <- data_corr %>% 
+  ggplot(aes(x = Hirst, y = Cosmo)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(data = data_corr, alpha = 0.1) +
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
+  geom_label(data = ci, aes(label = ci, x = x, y = y), parse = TRUE) +
+  coord_cartesian(ylim = c(0, 4), xlim = c(0, 4))
+
+title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
+
+ggarrange(gg_corr) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+### Altman-Bland Plots
+
+The well established AB-method for clinical trials can be used here as well to compare the means and differences between the two data sets. Again we see that XXX generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence XXX can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
+
+```{r}
+
+data_altman <- data_corr %>% 
+    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+                          rowSums(.[4:5], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff = Hirst - Cosmo)
+
+sd_diff <- data_altman %>% 
+  summarise(sd_diff = sd(diff, na.rm = TRUE)) %>% 
+  pull(sd_diff)
+
+gg_ab1 <- data_altman %>% 
+  ggplot(aes(x = mean, y = diff)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(min(data_altman$mean), max(data_altman$mean)), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
+  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(Hirst - Cosmo)", x = "Mean(Hirst, Cosmo)") 
+
+title <- "Altman-Bland Plot to Compare Measured and Modelled Pollen Concentrations"
+
+ggarrange(gg_ab1) %>%
+  annotate_figure(top = title, bottom = text_grob("Pairwise comparison of traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+
+  
 
 ```
 
