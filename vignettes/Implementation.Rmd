@@ -610,6 +610,10 @@ data_corr <- data_daily_comb %>%
   select(value, type, datetime, station, taxon) %>% 
   pivot_wider(names_from = type, values_from = value)
 
+data_corr_exp <- data_daily_comb %>% 
+  select(value, type, datetime, station, taxon) %>% 
+  pivot_wider(names_from = type, values_from = value)
+
 corr_matrix <- map(methods, ~corr.test(
   data_corr %>% select(-datetime, -station, -taxon),
   use = "complete",
@@ -649,17 +653,126 @@ ggarrange(gg_corr) %>%
 
 ```
 
-### Altman-Bland Plots
+Comparison Plots
 
-The well established AB-method for clinical trials can be used here as well to compare the means and differences between the two data sets. Again we see that XXX generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence XXX can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
+## Concentration Categories Diff-Plots
+
+For the concentrations we are looking at some density plots and histograms to start with and then we look at the relative differences from the common mean of the three traps.
 
 ```{r}
-
 data_altman <- data_corr %>% 
     mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
                           rowSums(.[4:5], na.rm = TRUE) / 2, 
                           NA_real_),
            diff = Hirst - Cosmo)
+
+data_altman_exp <- data_corr_exp %>% 
+    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+                          rowSums(.[4:5], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff = Hirst - Cosmo)
+```
+
+
+```{r }
+data_conc <- data_altman_exp %>% 
+  mutate(conc = case_when(
+            mean >= 0 & mean < 10 ~ "Group00_10",
+            mean >= 10 & mean < 20 ~ "Group10_20",
+            mean >= 20 & mean < 50 ~ "Group20_50",
+            mean >= 50 & mean < 100 ~ "Group50_100",
+            mean >= 100 & mean < 300 ~ "Group100_300",
+            mean >= 300 ~ "Group300"
+  )) %>% 
+  pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>% 
+  pivot_wider(names_from = conc, values_from = value)
+  
+
+gg_conc_dens <- list()
+gg_conc_hist <- list()
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012) # For 2-hours
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+  obs <- data_conc %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/2) %>% 
+    pull 
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_dens[[j]] <- data_conc %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
+    coord_cartesian(xlim = c(0, NA))
+}
+
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Comparison of", tools::toTitleCase(resolution), "Measurements of the Three Traps for all Species and Different Concentration Groups."),
+                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
+
+gg_dens_conc
+```
+
+```{r}
+
+data_conc_plot <- data_conc %>% 
+  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") 
+
+means <- data_conc_plot %>% 
+  group_by(group, type) %>% 
+  summarise(mean = mean(value, na.rm = TRUE))
+
+gg_boxplot_reldiff <- data_conc_plot %>% 
+  ggplot(aes(x = group, y = value, fill = type)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_point(data = means, aes(x = group, y = mean, col = type), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
+  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) +
+  scale_y_continuous(labels = scales::percent)
+
+```
+
+```{r}
+diff_selection <- list("Betula", "Fraxinus", "Poaceae", species_selection)
+
+kable_diff <- map(diff_selection,
+    ~data_conc_diff_plot %>% 
+    filter(type %in% .x) %>%
+    group_by(group, Traps) %>% 
+    summarise(q25 = quantile(value, probs = 0.25, na.rm = TRUE),
+              median = median(value, na.rm = TRUE),
+              q75 = quantile(value, probs = 0.75, na.rm = TRUE)) %>% 
+    ungroup %>% 
+    group_by(group) %>% 
+    summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
+    ungroup) %>% 
+  bind_rows %>% 
+  mutate(type = rep(c("Betula", "Fraxinus", "Poaceae", "Total"), each = 6),
+         type = cell_spec(type, angle = 270, align = "center")) %>% 
+  mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
+  select(type, everything()) %>% 
+  setNames(c("Species", "Group", "25%-Quantile", "Median", "75%-Quantile")) %>% 
+  kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 6, indent = FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 12, indent = FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 18, indent = FALSE) %>% 
+  pack_rows(start_row = 19, end_row = 24, indent = FALSE)
+
+kable_diff
+```
+
+## Altman-Bland Plots
+
+The well established AB-method for clinical trials can be used here as well to compare the means and differences between the two data sets. Again we see that XXX generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence XXX can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
+
+```{r}
 
 sd_diff <- data_altman %>% 
   summarise(sd_diff = sd(diff, na.rm = TRUE)) %>% 
