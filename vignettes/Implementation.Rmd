@@ -25,6 +25,8 @@ library(tidyr)
 library(purrr)
 library(stringr)
 library(scales)
+library(psych)
+library(caret)
 library(lubridate)
 library(tsibble)
 library(feasts)
@@ -41,6 +43,7 @@ devtools::load_all(".")
 library(conflicted)
 conflict_prefer(name = "select", winner = "dplyr")
 conflict_prefer(name = "filter", winner = "dplyr")
+conflict_prefer(name = "lag", winner = "dplyr")
 conflict_prefer(name = "rescale", winner = "scales")
 
 # remotes::install_version("caTools", version = "1.17.1.1")
@@ -713,7 +716,7 @@ for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_3
 }
 
 gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = paste("Comparison of", tools::toTitleCase(resolution), "Measurements of the Three Traps for all Species and Different Concentration Groups."),
+  annotate_figure(top = paste("Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups."),
                   bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
 
 gg_dens_conc
@@ -722,7 +725,8 @@ gg_dens_conc
 ```{r}
 
 data_conc_plot <- data_conc %>% 
-  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") 
+  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") %>% 
+  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")))
 
 means <- data_conc_plot %>% 
   group_by(group, type) %>% 
@@ -732,12 +736,17 @@ gg_boxplot_reldiff <- data_conc_plot %>%
   ggplot(aes(x = group, y = value, fill = type)) +
   geom_boxplot(alpha = 0.6) +
   geom_point(data = means, aes(x = group, y = mean, col = type), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
-  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) +
-  scale_y_continuous(labels = scales::percent)
+  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) 
+
+gg_boxplot_reldiff
+
+data_conc_plot %>% 
+  filter(group == "Group300",
+         !is.na(value))
 
 ```
 
-```{r}
+```{r eval = FALSE}
 diff_selection <- list("Betula", "Fraxinus", "Poaceae", species_selection)
 
 kable_diff <- map(diff_selection,
@@ -796,6 +805,60 @@ ggarrange(gg_ab1) %>%
   
 
 ```
+
+# Model Validation
+## Numerical
+
+http://www.sthda.com/english/articles/38-regression-model-validation/158-regression-model-accuracy-metrics-r-square-aic-bic-cp-and-more/
+
+```{r}
+data_conc_plot %>% 
+  pivot_wider(names_from = type, values_from = value) %>% 
+  summarise(
+    R2 = cor(Hirst, Cosmo, use = "complete.obs")^2,
+    MSE = mean((Hirst - Cosmo)^2, na.rm = TRUE),
+    RMSE = sqrt(MSE),
+    MAE = mean(abs(Hirst - Cosmo), na.rm = TRUE)
+  )
+
+```
+
+## Categorical
+
+http://www.sthda.com/english/articles/36-classification-methods-essentials/143-evaluation-of-classification-model-accuracy-essentials/
+
+https://towardsdatascience.com/the-5-classification-evaluation-metrics-you-must-know-aa97784ff226
+
+https://towardsdatascience.com/multi-class-metrics-made-simple-part-i-precision-and-recall-9250280bddc2
+```{r}
+
+
+
+data_valid <- data_altman_exp %>% 
+  mutate(conc_hirst = case_when(
+            Hirst >= 0 & Hirst < 10 ~ "Group00_10",
+            Hirst >= 10 & Hirst < 20 ~ "Group10_20",
+            Hirst >= 20 & Hirst < 50 ~ "Group20_50",
+            Hirst >= 50 & Hirst < 100 ~ "Group50_100",
+            Hirst >= 100 & Hirst < 300 ~ "Group100_300",
+            Hirst >= 300 ~ "Group300"
+          ),
+            conc_cosmo = case_when(
+            Cosmo >= 0 & Cosmo < 10 ~ "Group00_10",
+            Cosmo >= 10 & Cosmo < 20 ~ "Group10_20",
+            Cosmo >= 20 & Cosmo < 50 ~ "Group20_50",
+            Cosmo >= 50 & Cosmo < 100 ~ "Group50_100",
+            Cosmo >= 100 & Cosmo < 300 ~ "Group100_300",
+            Cosmo >= 300 ~ "Group300"
+            )
+         ) %>% 
+  filter(!is.na(conc_hirst),
+         !is.na(conc_cosmo)) %>% 
+  mutate_at(vars(conc_hirst, conc_cosmo), ~factor(., levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")))
+  
+confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
+```
+
 
 # Auto-Correlation
 
