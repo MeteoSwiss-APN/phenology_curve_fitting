@@ -17,9 +17,14 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
     data_plot <- data_hourly_comb
   }
 
+  data_plot <- data_plot %>%
+    filter(taxon == !!taxon,
+           station == !!station,
+           measurement == "concentration")
+
   if (rm_zeros){
     data_plot <- data_plot %>%
-      filter(value > 0 & !is.na(value))
+      filter(value > 0)
   }
 
   title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", taxon, " Pollen in ", station))
@@ -27,16 +32,12 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
   alpha_plot <- 0.5
 
   gg1 <- data_plot %>%
-    filter(taxon == taxon,
-           station == station) %>%
     ggplot(aes(x = datetime)) +
     geom_line(aes(y = value, col = type, alpha = alpha_plot)) +
     theme(legend.position = "none") +
     labs(y = "Mean Conc. [Pollen/m³]", x = "")
 
   gg2 <- data_plot %>%
-    filter(taxon == taxon,
-           station == station) %>%
     ggplot() +
     geom_boxplot(aes(y = log10(value), fill = type), alpha = alpha_plot) +
     theme(legend.position = "none",
@@ -45,8 +46,6 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
     labs(y = "Log Mean Conc. [Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
-    filter(taxon == taxon,
-           station == station) %>%
     ggplot() +
     geom_histogram(aes(y = log10(value), fill = type), alpha = alpha_plot, binwidth = 0.1) +
     # geom_label(data = sd_hirst, aes(label = paste("Standard Deviation:\n", round(sd), "Pollen / m³"), x = 8, y = 3.3, group = type), size = 3) +
@@ -64,7 +63,7 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
   }
 }
 
-#' Create a Comparison Plot of Pollen Concentrations for different traps and lines
+#' Create a Comparison Plot of Pollen Concentrations
 #'
 #' @param data A data frame that contains pollen data
 #' @param title The title for the table

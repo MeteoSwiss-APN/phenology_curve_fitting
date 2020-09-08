@@ -28,6 +28,7 @@ library(scales)
 library(psych)
 library(caret)
 library(lubridate)
+library(padr)
 library(tsibble)
 library(feasts)
 library(fabletools)
@@ -260,35 +261,6 @@ data_hirst<- data_hirst %>%
   mutate(value_unbiased = value / 1.35)
 ```
 
-# Missing Data and Imputation
-## Measurements
-
-There are no missing measurements.
-Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
-Are they being imputed before storing the data on the DWH?
-
-```{r  eval = FALSE}
-
-# This takes ~ 2minutes - visual representation of missing data
-# data_hirst %>% 
-#   as.data.frame() %>% 
-#   missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)])
-
-data_hirst %>% 
-  summarise_all(~sum(is.na(.)))
-
-summary(data_hirst)
-
-```
-
-## Model COSMO-ART
-
-```{r}
-data_cosmo %>% 
-  summarise_all(~sum(is.na(.)))
-
-summary(data_cosmo)
-```
 
 # Temporal Aggregation
 ## Measurements
@@ -382,24 +354,19 @@ data[[6]] <- data[[1]] %>%
 names(data) <- c("data_hourly", "data_2hours", "data_3hours", "data_6hours", "data_12hours", "data_daily")
 
 save(data, file = paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
-  
+
 ``` 
 
 ```{r}
 load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 ```
 
-
-# Time Series Plots
+## Model COSMO-Art
 
 ```{r}
-data_hourly_comb <- data$data_hourly %>% 
-    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
-    bind_rows(data_cosmo) 
-
-data_daily_comb <- data_hourly_comb %>% 
-  group_by(taxon, station, date, type) %>% 
-  summarise(value = mean(value, na.rm = TRUE)) %>% 
+data_daily_cosmo <- data_cosmo %>% 
+  group_by(taxon, station, date, type, measurement) %>% 
+  summarise(value = mean(value, na.rm = TRUE)) %>% # Currently the values are not averaged per hour but simply retrieved at every hour.
   ungroup %>% 
   mutate(hour = 0,
          # date = date + days(1), # Depends on the definition
@@ -407,11 +374,118 @@ data_daily_comb <- data_hourly_comb %>%
 ```
 
 
+# Missing Data and Imputation
+
+There are no NAs in the original data. But there are some timestamps where no data was retrieved.
+We will work with daily average concentrations below and hence have averaged values per hour and then per day.
+Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
+
+## Padding
+
+```{r}
+
+data_daily_imp <- data$data_daily %>%
+  filter(datetime >= ymd_h("2020-01-15 00")) %>% # Start of COSMO season?
+  pad(
+    start_val =  ymd_h("2020-01-15 00"),
+    end_val = ymd_h("2020-09-05 00"),
+    group = c("station", "taxon"),
+    by = "datetime"
+  ) %>% 
+  mutate(
+    date = date(datetime),
+    hour = hour(datetime),
+    type = "Hirst",
+    measurement = "concentration",
+    value = if_else(is.na(value), 0, value)
+  )
+  
+data_daily_cosmo_imp <- data_daily_cosmo %>%
+  pad(
+    start_val =  ymd_h("2020-01-15 00"),
+    end_val = ymd_h("2020-09-05 00"),
+    group = c("station", "taxon", "measurement"),
+    by = "datetime"
+  ) %>% 
+  mutate(
+    date = date(datetime),
+    hour = hour(datetime),
+    type = "Cosmo",
+    value = if_else(is.na(value), 0, value)
+  )
+  
+data_daily_comb <- data_daily_imp %>%
+  bind_rows(data_daily_cosmo_imp)
+
+```
+
+## Measurements
+
+Averaging daily leads to no days with missing data points. And generally there are enough measurements per day to justify using these averages.
+
+```{r  eval = FALSE}
+
+# This takes ~ 2minutes - visual representation of missing data
+# data_hirst %>% 
+#   as.data.frame() %>% 
+#   missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)])
+
+# data_hirst %>% 
+#   summarise_all(~sum(is.na(.)))
+# 
+# summary(data_hirst)
+
+data$data_daily %>%
+  summarise_all(~sum(is.na(.)))
+
+summary(data$data_daily)
+summary(data_daily_imp)
+
+```
+
+## Model COSMO-ART
+
+There are a lot of days with missing data. Those are days outside of the blooming season (as defined in COSMO) for the respective species. I think it should be safe to set those to zero instead of NA for the upcoming code chunks (because that is actually what the model would tell you). Is there a reason that data should be missing within te pollen season as well?
+
+```{r}
+data_cosmo %>%
+  summarise_all(~sum(is.na(.)))
+
+summary(data_cosmo)
+
+summary(data_daily_cosmo)
+
+summary(data_daily_cosmo_imp)
+
+# data_cosmo <- data_cosmo %>% 
+#   mutate(value = if_else(is.na(value), 0, value))
+  
+```
+
+
+## Combined Daily Values
+
+
+
+```{r}
+data_daily_comb %>% 
+  summarise_all(~sum(is.na(.)))
+
+data_daily_comb %>% 
+  filter(!is.na(value)) %>% 
+  select(taxon) %>% 
+  unique
+
+summary(data_daily_comb)
+
+```
+
+
+# Time Series Plots
+
 ```{r }
 
-# gg_comparison <- plot_hirst(species = species, resolution = resolution, rm_zeros = TRUE, combined = TRUE)
-
-plot_comb(combined = TRUE, taxon = "Alnus", station = "Bern", resolution = "Daily", rm_zeros = FALSE)
+plot_comb(taxon = "Poaceae", station = "Zürich", resolution = "Daily", combined = TRUE, rm_zeros = FALSE)
 
 ```
 
@@ -419,59 +493,47 @@ plot_comb(combined = TRUE, taxon = "Alnus", station = "Bern", resolution = "Dail
 ```{r }
 
 occurence <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
   group_by(taxon, station, type) %>% 
-  summarise(value = sum(value != 0, na.rm = TRUE)) %>% 
+  summarise(value = sum(value != 0)) %>% 
   ungroup() %>% 
   mutate(metric = "occurence")
 
 maximum <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
   group_by(taxon, station, type) %>% 
-  summarise(value = max(value, na.rm = TRUE)) %>% 
+  summarise(value = max(value)) %>% 
   ungroup() %>% 
   mutate(metric = "maximum")
 
-average <- data_daily_comb %>% 
-  group_by(taxon, station, type) %>% 
-  summarise(value = mean(value, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  mutate(metric = "average")
+# average <- data_daily_comb %>% # This would need a season definition
+#   filter(measurement == "concentration") %>% 
+#   group_by(taxon, station, type) %>% 
+#   summarise(value = mean(value)) %>% 
+#   ungroup() %>% 
+#   mutate(metric = "average")
 
 spi <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
   group_by(taxon, station, type) %>% 
-  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  summarise(value = sum(value)) %>% 
   ungroup() %>% 
   mutate(metric = "spi")
 
-metrics <- bind_rows(occurence,
-                  maximum,
-                  average,
-                  spi)
+# metrics <- bind_rows(occurence, maximum, average, spi)
 
 create_kable(occurence, title = "Occurence of Pollen [Days]")
 create_kable(maximum, title = "Maximum Pollen Concentration [m⁻³]")
-create_kable(average, title = "Average Pollen Concentration [m⁻³]")
+# create_kable(average, title = "Average Pollen Concentration [m⁻³]")
 create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
 
 ```
 
-```{r fig.height=9, fig.width=16, eval = FALSE}
-stations_subset <- map(c(4, 8, 12, 16), ~stations %>% 
-                         arrange(station) %>% 
-                         slice((.x - 3):.x) %>% 
-                         pull(station))
-
-map(stations_subset, ~data$data_daily %>% 
-  filter(station %in% .x) %>% 
-  ggplot(aes(x = datetime, y = value, col = taxon)) +
-    geom_line() +
-    # coord_cartesian(ylim = c(0, 5000)) +
-    labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
-       x = "") +
-  scale_colour_discrete("") +
-    facet_wrap(~station))
-```
-
 ## Concentrations
+
+- Cosmo modeled concentrations are generally too low in Visp and too high in Basel
+- All species are modeled incorrectly at some station.
+- Betula in Luzern has a weird shape in the measurements
 
 ```{r fig.height=6, fig.width=9}
 
@@ -480,14 +542,12 @@ taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tib
 gg_timeseries <- list()
 
 for (s in stations$station %>% sort){
-  data_timeseries <- data$data_hourly %>% 
-    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
-    bind_rows(data_cosmo) %>% 
+  data_timeseries <- data_daily_comb %>% 
     filter(taxon %in% taxa_selected,
            station %in% s,
            measurement == "concentration") %>% 
     group_by(type, taxon, date, station) %>%
-    summarise(value = mean(value, na.rm = TRUE)) %>%
+    summarise(value = mean(value)) %>%
     ungroup 
   
   large_diffs <- data_timeseries %>%
@@ -513,9 +573,15 @@ for (s in stations$station %>% sort){
 
 gg_timeseries
 
+# data_daily_comb %>% filter(taxon == "Betula", type == "Hirst", station == "Luzern") # There is missing data in Luzern for Betula.
+
 ```
 
 ## Phenology
+
+- Lugano and Locarno phenologies are shifted vs measurements.
+- Alnus and Betula to a lesser degree have phenology shifts.
+
 
 ```{r fig.height=6, fig.width=9}
 
@@ -524,14 +590,12 @@ taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tib
 gg_pheno <- list()
 
 for (s in stations$station %>% sort){
-  gg_pheno[[s]] <- data$data_hourly %>% 
-    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
-    bind_rows(data_cosmo) %>% 
+  gg_pheno[[s]] <- data_daily_comb %>% 
     filter(taxon %in% taxa_selected,
            station %in% s,
            measurement == "concentration" & type == "Hirst" | measurement == "phenology" & type == "Cosmo") %>% 
     group_by(type, taxon, date, station) %>%
-    summarise(value = mean(value, na.rm = TRUE)) %>%
+    summarise(value = mean(value)) %>%
     ungroup %>% 
     group_by(type) %>% 
     mutate(value = rescale(value, to = c(0, 100))) %>% 
@@ -559,14 +623,14 @@ taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tib
 gg_emiss <- list()
 
 for (s in stations$station %>% sort){
-  gg_emiss[[s]] <- data$data_hourly %>% 
-    filter(datetime >= ymd_h("2020-01-01 00")) %>% 
+  gg_emiss[[s]] <- data_daily_comb %>% 
+    filter(measurement == "concentration") %>% 
     bind_rows(data_cosmo) %>% 
     filter(taxon %in% taxa_selected,
            station %in% s,
            measurement == "concentration" & type == "Hirst" | measurement == "emission" & type == "Cosmo") %>% 
     group_by(type, taxon, date, station) %>%
-    summarise(value = mean(value, na.rm = TRUE)) %>%
+    summarise(value = mean(value)) %>%
     ungroup %>% 
     group_by(type) %>% 
     mutate(value = rescale(value, to = c(0, 100))) %>% 
@@ -609,17 +673,19 @@ Generally the traps show a high level of correlation / association (well above 0
 methods <- c("pearson", "spearman", "kendall")
 
 data_corr <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
   mutate(value = log10(value + 1)) %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
   select(value, type, datetime, station, taxon) %>% 
   pivot_wider(names_from = type, values_from = value)
 
 data_corr_exp <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
   select(value, type, datetime, station, taxon) %>% 
   pivot_wider(names_from = type, values_from = value)
 
 corr_matrix <- map(methods, ~corr.test(
   data_corr %>% select(-datetime, -station, -taxon),
-  use = "complete",
+  # use = "complete", # There should be only complete observations
   method = .x,
   # adjust = "holm",
   alpha = .05,
@@ -652,7 +718,7 @@ gg_corr <- data_corr %>%
 title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
 
 ggarrange(gg_corr) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between measured and modelled data; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
@@ -726,45 +792,49 @@ gg_dens_conc
 
 data_conc_plot <- data_conc %>% 
   pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") %>% 
-  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")))
+  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")),
+         reldiff = diff / mean) %>% 
+  filter(!is.na(value))
 
 means <- data_conc_plot %>% 
   group_by(group, type) %>% 
-  summarise(mean = mean(value, na.rm = TRUE))
+  summarise(mean = mean(reldiff))
 
 gg_boxplot_reldiff <- data_conc_plot %>% 
-  ggplot(aes(x = group, y = value, fill = type)) +
+  ggplot(aes(x = group, y = reldiff)) +
   geom_boxplot(alpha = 0.6) +
-  geom_point(data = means, aes(x = group, y = mean, col = type), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
+  geom_point(data = means, aes(x = group, y = mean), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
   labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) 
 
 gg_boxplot_reldiff
 
-data_conc_plot %>% 
-  filter(group == "Group300",
-         !is.na(value))
+data_conc %>% 
+  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") %>% 
+  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")),
+         reldiff = diff / mean) %>% 
+  filter(!is.na(value)) %>% filter(is.na(diff))
 
 ```
 
 ```{r eval = FALSE}
-diff_selection <- list("Betula", "Fraxinus", "Poaceae", species_selection)
+diff_selection <- list("Alnus", "Betula", "Poaceae", "Ambrosia")
 
 kable_diff <- map(diff_selection,
-    ~data_conc_diff_plot %>% 
-    filter(type %in% .x) %>%
-    group_by(group, Traps) %>% 
-    summarise(q25 = quantile(value, probs = 0.25, na.rm = TRUE),
-              median = median(value, na.rm = TRUE),
-              q75 = quantile(value, probs = 0.75, na.rm = TRUE)) %>% 
+    ~data_conc_plot %>% 
+    filter(taxon %in% .x) %>%
+    group_by(group, type) %>% 
+    summarise(q25 = quantile(reldiff, probs = 0.25, na.rm = TRUE),
+              median = median(reldiff, na.rm = TRUE),
+              q75 = quantile(reldiff, probs = 0.75, na.rm = TRUE)) %>% 
     ungroup %>% 
     group_by(group) %>% 
     summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
     ungroup) %>% 
   bind_rows %>% 
-  mutate(type = rep(c("Betula", "Fraxinus", "Poaceae", "Total"), each = 6),
-         type = cell_spec(type, angle = 270, align = "center")) %>% 
+  mutate(taxon = c(rep(c("Alnus", "Betula", "Poaceae"), each = 6), rep("Ambrosia", each = 2)),
+         taxon = cell_spec(taxon, angle = 270, align = "center")) %>% 
   mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
-  select(type, everything()) %>% 
+  select(taxon, everything()) %>% 
   setNames(c("Species", "Group", "25%-Quantile", "Median", "75%-Quantile")) %>% 
   kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>% 
   kable_styling("striped", full_width = FALSE) %>% 
