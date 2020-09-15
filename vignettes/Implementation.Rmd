@@ -223,7 +223,7 @@ data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
   inner_join(stations, by = c("nat_abbr" = "hirst_station")) %>% 
   select(-param_short, -nat_abbr)
 
-# save(data_hirst, file = paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
+save(data_hirst, file = paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
 # load(paste0(here::here(), "/vignettes/ext-data/data_hirst.RData"))
 
@@ -232,20 +232,20 @@ data_hirst <- dwhget_surface(param_short = species$hirst_taxon,
 ## Model COSMO-ART
 
 ```{r}
-data_cosmo <- read_delim(paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv"), delim = " ", skip = 17, col_names = TRUE, trim_ws = TRUE) %>% 
-  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>% # setting na during import failed for some reason 
-  pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%  
+data_cosmo <- read_table2(paste0(here::here(), "/vignettes/ext-data/pollen.csv")) %>%
+  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>% # setting na during import failed for some reason
+  pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%
   mutate(measurement = case_when(str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
                                  str_detect(PARAMETER, pattern = "fe") ~ "emission",
                                  TRUE ~ "concentration"),
-         PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")) %>% 
-  inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>% 
-  inner_join(stations, by = c("station_tag" = "cosmo_station")) %>% 
+         PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")) %>%
+  inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
+  inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
   mutate(datetime = ymd_h(paste0(YYYY, sprintf("%02d", MM), sprintf("%02d", DD), sprintf("%02d", hh))),
          date = date(datetime),
          hour = hour(datetime),
-         type = "Cosmo") %>% 
-  # filter(between(datetime, as_datetime("2017-03-02 00:01:00"), as_datetime("2020-08-19 00:00:00"))) %>% 
+         type = "Cosmo") %>%
+  # filter(between(datetime, as_datetime("2017-03-02 00:01:00"), as_datetime("2020-08-19 00:00:00"))) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
 
 ```
@@ -279,6 +279,8 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 
 ```{r eval = FALSE}
 
+summary(data_cosmo)
+
 data_hirst <- data_hirst %>%
   mutate(date = date(datetime),
          hms = format(datetime, "%H:%M:%S"),
@@ -286,7 +288,7 @@ data_hirst <- data_hirst %>%
          hour = ifelse(hour == 24, 0, hour))
   
 data_hirst_window <- data_hirst %>% 
-  filter(between(datetime, as_datetime("2017-03-02 00:10:00"), as_datetime("2020-08-19 00:00:00"))) # Only look at full days
+  filter(between(datetime, as_datetime("2017-02-08 00:10:00"), as_datetime("2020-09-03 00:00:00"))) # Only look at full days
 
 data_hourly <- data_hirst_window
          
@@ -384,13 +386,31 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 
 ```{r}
 
-data_daily_imp <- data$data_daily %>%
-  filter(datetime >= ymd_h("2020-01-15 00")) %>% # Start of COSMO season?
+data_hourly_imp <- data$data_hourly %>%
+  filter(datetime >= ymd_h("2017-02-08 01")) %>%
   pad(
-    start_val =  ymd_h("2020-01-15 00"),
-    end_val = ymd_h("2020-09-05 00"),
+    start_val =  ymd_h("2017-02-08 01"),
+    end_val = ymd_h("2020-09-03 00"),
     group = c("station", "taxon"),
-    by = "datetime"
+    by = "datetime",
+    break_above = 2
+  ) %>% 
+  mutate(
+    date = date(datetime),
+    hour = hour(datetime),
+    type = "Hirst",
+    measurement = "concentration",
+    value = if_else(is.na(value), 0, value)
+  )
+
+data_daily_imp <- data$data_daily %>%
+  filter(datetime >= ymd_h("2017-02-08 00")) %>% # Start of COSMO season?
+  pad(
+    start_val =  ymd_h("2017-02-08 00"),
+    end_val = ymd_h("2020-09-03 00"),
+    group = c("station", "taxon"),
+    by = "datetime",
+    break_above = 2
   ) %>% 
   mutate(
     date = date(datetime),
@@ -402,10 +422,11 @@ data_daily_imp <- data$data_daily %>%
   
 data_daily_cosmo_imp <- data_daily_cosmo %>%
   pad(
-    start_val =  ymd_h("2020-01-15 00"),
-    end_val = ymd_h("2020-09-05 00"),
+    start_val =  ymd_h("2017-02-08 00"),
+    end_val = ymd_h("2020-09-03 00"),
     group = c("station", "taxon", "measurement"),
-    by = "datetime"
+    by = "datetime",
+    break_above = 2
   ) %>% 
   mutate(
     date = date(datetime),
@@ -485,22 +506,26 @@ summary(data_daily_comb)
 
 ```{r }
 
-plot_comb(taxon = "Poaceae", station = "Zürich", resolution = "Daily", combined = TRUE, rm_zeros = FALSE)
+plot_comb(taxon = "Alnus", station = "Zürich", resolution = "Daily", combined = TRUE, rm_zeros = FALSE)
 
 ```
 
 
 ```{r }
 
+year_selected = 2018
+
 occurence <- data_daily_comb %>% 
-  filter(measurement == "concentration") %>% 
+  filter(measurement == "concentration",
+         year(datetime) == year_selected) %>% 
   group_by(taxon, station, type) %>% 
   summarise(value = sum(value != 0)) %>% 
   ungroup() %>% 
   mutate(metric = "occurence")
 
 maximum <- data_daily_comb %>% 
-  filter(measurement == "concentration") %>% 
+  filter(measurement == "concentration",
+         year(datetime) == year_selected) %>% 
   group_by(taxon, station, type) %>% 
   summarise(value = max(value)) %>% 
   ungroup() %>% 
@@ -514,7 +539,8 @@ maximum <- data_daily_comb %>%
 #   mutate(metric = "average")
 
 spi <- data_daily_comb %>% 
-  filter(measurement == "concentration") %>% 
+  filter(measurement == "concentration",
+         year(datetime) == year_selected) %>% 
   group_by(taxon, station, type) %>% 
   summarise(value = sum(value)) %>% 
   ungroup() %>% 
@@ -567,7 +593,7 @@ for (s in stations$station %>% sort){
          x = "2020 Season") +
     scale_colour_discrete("Species") +
     scale_linetype_discrete("Data") +
-    coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+    coord_cartesian(xlim = c(ymd("2017-02-08"), ymd("2020-09-03")), # Define your season here
                     ylim = c(0, 2000)) 
 }
 
@@ -606,7 +632,7 @@ for (s in stations$station %>% sort){
          x = "2020 Season") +
       scale_colour_discrete("Species") +
       scale_linetype_discrete("Data") +
-      coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+      coord_cartesian(xlim = c(ymd("2017-02-08"), ymd("2020-09-03")), # Define your season here
                       ylim = c(0, 100)) 
 }
 
@@ -641,7 +667,7 @@ for (s in stations$station %>% sort){
          x = "2020 Season") +
       scale_colour_discrete("Species") +
       scale_linetype_discrete("Data") +
-      coord_cartesian(xlim = c(ymd("2020-01-15"), ymd("2020-09-01")),
+      coord_cartesian(xlim = c(ymd("2017-02-08"), ymd("2020-09-03")), # Define your season here
                       ylim = c(0, 100)) 
 }
 
@@ -704,16 +730,18 @@ ci <- map(corr_matrix, ~.x %>%
   mutate(method = methods,
          metric = c("R-", "rho-", "tau-"),
          ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
-         x = rep(1, times = 3),
-         y = c(3.75, 3.5, 3.25))
+         x = rep(2, times = 3),
+         y = c(4000, 2500, 1600))
 
-gg_corr <- data_corr %>% 
+gg_corr <- data_corr_exp %>% 
   ggplot(aes(x = Hirst, y = Cosmo)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(data = data_corr, alpha = 0.1) +
+  # geom_smooth(alpha = 0.1) +  # The smoother is dependent on the scale (i.e. log or not) and rather confusing than helping
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(data = ci, aes(label = ci, x = x, y = y), parse = TRUE) +
-  coord_cartesian(ylim = c(0, 4), xlim = c(0, 4))
+  coord_cartesian(ylim = c(0, 4000), xlim = c(0, 4000)) +
+  scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000)) +
+  scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]",trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000))
 
 title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
 
@@ -831,7 +859,7 @@ kable_diff <- map(diff_selection,
     summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
     ungroup) %>% 
   bind_rows %>% 
-  mutate(taxon = c(rep(c("Alnus", "Betula", "Poaceae"), each = 6), rep("Ambrosia", each = 2)),
+  mutate(taxon = c(rep(c("Alnus", "Betula", "Poaceae"), each = 6), rep("Ambrosia", each = 4)),
          taxon = cell_spec(taxon, angle = 270, align = "center")) %>% 
   mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
   select(taxon, everything()) %>% 
@@ -929,14 +957,13 @@ data_valid <- data_altman_exp %>%
 confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
 ```
 
+# Temporal Dependencies
 
-# Auto-Correlation
+## Scatterplots
 
-In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
+```{r}
 
-```{r fig.height=10, fig.width=10}
-
-ts_autocorr_tb <- data$data_hourly %>% 
+ts_autocorr_tb <- data_hourly_imp %>% 
   mutate(value = if_else(is.na(value), 0, value),
          value = log(value + 1)) %>% 
   filter(taxon == "Poaceae",
@@ -945,16 +972,6 @@ ts_autocorr_tb <- data$data_hourly %>%
   select(datetime, value)
 
 ts_autocorr <- as_tsibble(ts_autocorr_tb, regular = TRUE, index = datetime)
-
-# Timeseries Plot
-
-ts_autocorr_tb %>%
-  ggplot(aes(x = datetime, y = value)) +
-  geom_line() +
-  ggtitle("Poaceae Pollen Concentrations for Hourly Intervals") +
-  labs(x = "Date", y = paste0("Pollen Concentration [m⁻³]"))
-
-# Index-Plot from ANOVA Residuals
 
 # Lagged Scatterplot
 
@@ -974,7 +991,14 @@ ts_autocorr_tb %>%
   # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
   labs(x = "", y = "") +
   facet_wrap(~ lag)
+```
 
+
+## Decomposition and Auto-Correlation
+
+In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
+
+```{r fig.height=10, fig.width=10}
 
 # Decomposition: As we are only looking at one year of data, decomposition into trend and seasonal effect makes little sense. This would be an interesting exercise for the future though, once we have multiple years of collected Poleno Data. Actually, there might be daily "seasonal" effects that we can filter out. Let's try :-)
 
