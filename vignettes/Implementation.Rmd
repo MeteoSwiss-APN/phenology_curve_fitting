@@ -736,12 +736,14 @@ ci <- map(corr_matrix, ~.x %>%
 gg_corr <- data_corr_exp %>% 
   ggplot(aes(x = Hirst, y = Cosmo)) + 
   geom_point(alpha = 0.3) +
-  # geom_smooth(alpha = 0.1) +  # The smoother is dependent on the scale (i.e. log or not) and rather confusing than helping
+  geom_smooth(alpha = 0.1) +  # The smoother is dependent on the scale (i.e. log or not) and rather confusing than helping
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(data = ci, aes(label = ci, x = x, y = y), parse = TRUE) +
-  coord_cartesian(ylim = c(0, 4000), xlim = c(0, 4000)) +
-  scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000)) +
-  scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]",trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000))
+  scale_x_continuous(name = "Modelled Pollen Concentration [m⁻³]", limits = c(0, 1000)) +
+  scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", limits = c(0, 1000))
+  # coord_cartesian(ylim = c(10, 500), xlim = c(10, 500))  +
+  # scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000)) +
+  # scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]",trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000))
 
 title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
 
@@ -770,20 +772,31 @@ data_altman_exp <- data_corr_exp %>%
            diff = Hirst - Cosmo)
 ```
 
+This is how concentration classes are defined based on their allergenic potential.
 
 ```{r }
 data_conc <- data_altman_exp %>% 
+  filter(mean >= 1) %>% 
   mutate(conc = case_when(
-            mean >= 0 & mean < 10 ~ "Group00_10",
-            mean >= 10 & mean < 20 ~ "Group10_20",
-            mean >= 20 & mean < 50 ~ "Group20_50",
-            mean >= 50 & mean < 100 ~ "Group50_100",
-            mean >= 100 & mean < 300 ~ "Group100_300",
-            mean >= 300 ~ "Group300"
+            taxon == "Alnus" & mean >= 1 & mean <= 10 ~ "weak",
+            taxon == "Alnus" & mean >= 11 & mean <= 69 ~ "medium",
+            taxon == "Alnus" & mean >= 70 & mean <= 249~ "strong",
+            taxon == "Alnus" & mean >= 250 ~ "verystrong",
+            taxon == "Betula" & mean >= 1 & mean <= 10 ~ "weak",
+            taxon == "Betula" & mean >= 11 & mean <= 69 ~ "medium",
+            taxon == "Betula" & mean >= 70 & mean <= 299 ~ "strong",
+            taxon == "Betula" & mean >= 300 ~ "verystrong",
+            taxon == "Poaceae" & mean >= 1 & mean <= 19 ~ "weak",
+            taxon == "Poaceae" & mean >= 20 & mean <= 49 ~ "medium",
+            taxon == "Poaceae" & mean >= 50 & mean <= 149~ "strong",
+            taxon == "Poaceae" & mean >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & mean >= 1 & mean <= 5 ~ "weak",
+            taxon == "Ambrosia" & mean >= 6 & mean <= 10 ~ "medium",
+            taxon == "Ambrosia" & mean >= 11 & mean <= 39 ~ "strong",
+            taxon == "Ambrosia" & mean >= 40 ~ "verystrong"
   )) %>% 
   pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>% 
   pivot_wider(names_from = conc, values_from = value)
-  
 
 gg_conc_dens <- list()
 gg_conc_hist <- list()
@@ -791,10 +804,10 @@ gg_conc_hist <- list()
 labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
 labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012) # For 2-hours
 labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
-names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
-names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+names(labels_y) <- c("weak", "medium", "strong", "verystrong")
+names(labels_y_hist) <- c("weak", "medium", "strong", "verystrong")
 
-for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+for (j in c("weak", "medium", "strong", "verystrong")){
   obs <- data_conc %>% 
     filter(!is.na(!!sym(j))) %>% 
     summarise(n()/2) %>% 
@@ -813,14 +826,14 @@ gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>%
   annotate_figure(top = paste("Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups."),
                   bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
 
-gg_dens_conc
+# gg_dens_conc
 ```
 
 ```{r}
 
 data_conc_plot <- data_conc %>% 
-  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") %>% 
-  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")),
+  pivot_longer(weak:verystrong, names_to = "group", values_to = "value") %>% 
+  mutate(group = factor(group, levels = c("weak", "medium", "strong", "verystrong")),
          reldiff = diff / mean) %>% 
   filter(!is.na(value))
 
@@ -832,15 +845,10 @@ gg_boxplot_reldiff <- data_conc_plot %>%
   ggplot(aes(x = group, y = reldiff)) +
   geom_boxplot(alpha = 0.6) +
   geom_point(data = means, aes(x = group, y = mean), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
-  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) 
+  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) +
+  facet_wrap(~ taxon)
 
 gg_boxplot_reldiff
-
-data_conc %>% 
-  pivot_longer(Group00_10:Group300, names_to = "group", values_to = "value") %>% 
-  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")),
-         reldiff = diff / mean) %>% 
-  filter(!is.na(value)) %>% filter(is.na(diff))
 
 ```
 
@@ -859,18 +867,18 @@ kable_diff <- map(diff_selection,
     summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
     ungroup) %>% 
   bind_rows %>% 
-  mutate(taxon = c(rep(c("Alnus", "Betula", "Poaceae"), each = 6), rep("Ambrosia", each = 4)),
+  mutate(taxon = c(rep(c("Alnus", "Betula", "Poaceae", "Ambrosia"), each = 4)),
          taxon = cell_spec(taxon, angle = 270, align = "center")) %>% 
   mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
   select(taxon, everything()) %>% 
-  setNames(c("Species", "Group", "25%-Quantile", "Median", "75%-Quantile")) %>% 
+  setNames(c("Species", "Class", "25%-Quantile", "Median", "75%-Quantile")) %>% 
   kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>% 
   kable_styling("striped", full_width = FALSE) %>% 
   collapse_rows(columns = 1) %>%
-  pack_rows(start_row = 1, end_row = 6, indent = FALSE) %>% 
-  pack_rows(start_row = 7, end_row = 12, indent = FALSE) %>% 
-  pack_rows(start_row = 13, end_row = 18, indent = FALSE) %>% 
-  pack_rows(start_row = 19, end_row = 24, indent = FALSE)
+  pack_rows(start_row = 1, end_row = 4, indent = FALSE) %>% 
+  pack_rows(start_row = 5, end_row = 8, indent = FALSE) %>% 
+  pack_rows(start_row = 9, end_row = 12, indent = FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 16, indent = FALSE)
 
 kable_diff
 ```
@@ -893,7 +901,8 @@ gg_ab1 <- data_altman %>%
   geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_smooth(alpha = 0.1) +
-  labs(y = "Difference(Hirst - Cosmo)", x = "Mean(Hirst, Cosmo)") 
+  labs(y = "Difference(Hirst - Cosmo)", x = "Mean(Hirst, Cosmo)") +
+  facet_wrap(~taxon)
 
 title <- "Altman-Bland Plot to Compare Measured and Modelled Pollen Concentrations"
 
@@ -929,30 +938,47 @@ https://towardsdatascience.com/the-5-classification-evaluation-metrics-you-must-
 
 https://towardsdatascience.com/multi-class-metrics-made-simple-part-i-precision-and-recall-9250280bddc2
 ```{r}
-
-
-
 data_valid <- data_altman_exp %>% 
   mutate(conc_hirst = case_when(
-            Hirst >= 0 & Hirst < 10 ~ "Group00_10",
-            Hirst >= 10 & Hirst < 20 ~ "Group10_20",
-            Hirst >= 20 & Hirst < 50 ~ "Group20_50",
-            Hirst >= 50 & Hirst < 100 ~ "Group50_100",
-            Hirst >= 100 & Hirst < 300 ~ "Group100_300",
-            Hirst >= 300 ~ "Group300"
+            taxon == "Alnus" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+            taxon == "Alnus" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+            taxon == "Alnus" & Hirst >= 70 & Hirst <= 249~ "strong",
+            taxon == "Alnus" & Hirst >= 250 ~ "verystrong",
+            taxon == "Betula" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+            taxon == "Betula" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+            taxon == "Betula" & Hirst >= 70 & Hirst <= 299 ~ "strong",
+            taxon == "Betula" & Hirst >= 300 ~ "verystrong",
+            taxon == "Poaceae" & Hirst >= 1 & Hirst <= 19 ~ "weak",
+            taxon == "Poaceae" & Hirst >= 20 & Hirst <= 49 ~ "medium",
+            taxon == "Poaceae" & Hirst >= 50 & Hirst <= 149~ "strong",
+            taxon == "Poaceae" & Hirst >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & Hirst >= 1 & Hirst <= 5 ~ "weak",
+            taxon == "Ambrosia" & Hirst >= 6 & Hirst <= 10 ~ "medium",
+            taxon == "Ambrosia" & Hirst >= 11 & Hirst <= 39 ~ "strong",
+            taxon == "Ambrosia" & Hirst >= 40 ~ "verystrong"
           ),
-            conc_cosmo = case_when(
-            Cosmo >= 0 & Cosmo < 10 ~ "Group00_10",
-            Cosmo >= 10 & Cosmo < 20 ~ "Group10_20",
-            Cosmo >= 20 & Cosmo < 50 ~ "Group20_50",
-            Cosmo >= 50 & Cosmo < 100 ~ "Group50_100",
-            Cosmo >= 100 & Cosmo < 300 ~ "Group100_300",
-            Cosmo >= 300 ~ "Group300"
-            )
-         ) %>% 
+         conc_cosmo = case_when(
+            taxon == "Alnus" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+            taxon == "Alnus" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+            taxon == "Alnus" & Cosmo >= 70 & Cosmo <= 249~ "strong",
+            taxon == "Alnus" & Cosmo >= 250 ~ "verystrong",
+            taxon == "Betula" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+            taxon == "Betula" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+            taxon == "Betula" & Cosmo >= 70 & Cosmo <= 299 ~ "strong",
+            taxon == "Betula" & Cosmo >= 300 ~ "verystrong",
+            taxon == "Poaceae" & Cosmo >= 1 & Cosmo <= 19 ~ "weak",
+            taxon == "Poaceae" & Cosmo >= 20 & Cosmo <= 49 ~ "medium",
+            taxon == "Poaceae" & Cosmo >= 50 & Cosmo <= 149~ "strong",
+            taxon == "Poaceae" & Cosmo >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & Cosmo >= 1 & Cosmo <= 5 ~ "weak",
+            taxon == "Ambrosia" & Cosmo >= 6 & Cosmo <= 10 ~ "medium",
+            taxon == "Ambrosia" & Cosmo >= 11 & Cosmo <= 39 ~ "strong",
+            taxon == "Ambrosia" & Cosmo >= 40 ~ "verystrong"
+         )
+  ) %>% 
   filter(!is.na(conc_hirst),
          !is.na(conc_cosmo)) %>% 
-  mutate_at(vars(conc_hirst, conc_cosmo), ~factor(., levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")))
+  mutate_at(vars(conc_hirst, conc_cosmo), ~factor(., levels = c("weak", "medium", "strong", "verystrong")))
   
 confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
 ```
@@ -968,6 +994,7 @@ ts_autocorr_tb <- data_hourly_imp %>%
          value = log(value + 1)) %>% 
   filter(taxon == "Poaceae",
          station == "Zürich",
+         year(datetime) == 2019,
          value > 0) %>% 
   select(datetime, value)
 
