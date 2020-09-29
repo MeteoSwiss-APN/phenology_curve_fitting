@@ -266,39 +266,42 @@ Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn n�
 
 # Anforderungen
 
-- Data Pipeline, um die Echtzeit-Pollendaten abzurufen, Dani fragen (APN), welche Verzögerung noch in Ordnung ist.
+- Die Echtzeit-Daten der Poleno-Geräte können mit der Funktion retrieve_cscs abgerufen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden. Dani fragen (APN), welche Verzögerung noch in Ordnung ist.
 
-   - Für das DWH steht die Pipeline und die Messdaten sind direkt in R verfügbar auf tsa (cscs) und zueub915.
-  
-    - Das Skript (fieldextra namelist) um die modellierten Pollen-Konzentration von 2017-2020 (Modell-Beginn)abzurufen existiert und ist fast durchgelaufen. Allerdings müsste dieses evtl. noch angepasst werden um Stundenmittelwerte anstatt punktuelle Messwerte abzurufen.
+    - Für das DWH steht die Pipeline und die DWH-Messdaten sind direkt in R verfügbar auf tsa (cscs) und zueub915.
 
-Die Echtzeit-Daten der Poleno-Geräte können im Modul data_pollen geladen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
-  
-    - Dani meinte, dass eine Stunde Verspätung noch okay ist. Dies könnte knapp werden, wenn man das Paper von Galley (2020) berücksichtigt wo anscheinend 3h-Verzögerung beobachtet wurde. *Die KENDA Datenassimilation wird stündlich gerechnet, und es wird ein cut_off von 45min eingehalten. D.h. die Analyse startet frühestens 45min nach der Analysenzeit (also eine 00UTC Analyse wird erst um 00:45UTC gerechnet). Dies, damit genügend Beobachtungen in der Datenbank sind, denn diese brauchen eine bestimmte Zeit, bis sie hier ankommen. Wenn du die Pollendaten in COSMO-1E einbringen möchtest, ist das ein bisschen anders: Wie Du sagst, starten die COSMO-1E Vorhersagen alle 3h und immer um ca Analysezeit plus 1h (die zugehörige KENDA Analyse braucht noch ca 15min). Die Pollenbeobachtungen müssten also um Analysezeit + 1h verfügbar sein, damit sie in COSMO-1E verwendet werden können. Also z.B. für die 00UTC COSMO-1E Vorhersage müssten die Pollenbeobachtungen spätestens um 01UTC vorhanden sein. Beachte, dass unser Schedule immer in UTC läuft und in Sommer- und Winterzeit eine Stunde verschoben in Localtime ist!*
+    - Dani meinte, dass eine Stunde Verspätung noch okay ist. Dies könnte knapp werden, wenn man das Paper von Galley (2020) berücksichtigt wo anscheinend 3h-Verzögerung beobachtet wurde. Für Pollendaten sollte es aber auch okay sein mit 3h alten Daten zu rechnen, da die zeitliche autokorrelation normalerweise hoch ist innerhalb weniger Stunden. *Die KENDA Datenassimilation wird stündlich gerechnet, und es wird ein cut_off von 45min eingehalten. D.h. die Analyse startet frühestens 45min nach der Analysenzeit (also eine 00UTC Analyse wird erst um 00:45UTC gerechnet). Dies, damit genügend Beobachtungen in der Datenbank sind, denn diese brauchen eine bestimmte Zeit, bis sie hier ankommen. Wenn du die Pollendaten in COSMO-1E einbringen möchtest, ist das ein bisschen anders: Wie Du sagst, starten die COSMO-1E Vorhersagen alle 3h und immer um ca Analysezeit plus 1h (die zugehörige KENDA Analyse braucht noch ca 15min). Die Pollenbeobachtungen müssten also um Analysezeit + 1h verfügbar sein, damit sie in COSMO-1E verwendet werden können. Also z.B. für die 00UTC COSMO-1E Vorhersage müssten die Pollenbeobachtungen spätestens um 01UTC vorhanden sein. Beachte, dass unser Schedule immer in UTC läuft und in Sommer- und Winterzeit eine Stunde verschoben in Localtime ist!*
   
     - Gian: *Die Zeitliche Verzögerung über die Schnittstelle am Rohdatenserver ist im Bereich weniger Minuten ( 0-5 min vielleicht). Die Verzögerung in der operationellen Kette übers DWH kennen wir noch nicht da sich diese noch im Aufbau befindet, aber es ist geplant alle 10 Minuten Daten zu liefern. Es werden Pollenkonzentrationen ins DWH übermittelt (10minuten Werte und Stündliche Werte). Die Rohdaten (Events mit Timestamp) werden nur im Rohdatenserver archiviert*
   
-- Wo wird die Validierung stattfinden? Ist es am besten, rstudio auf tsa zu installieren? 
-
-    - In R auf zueub915 oder direkt tsa. Auf beiden Systemen ist R 3.5.2 installiert. Die fieldextra namelist muss auf tsa ausgeführt werden und das resultierende csv-file in den Projekt-Ordner kopiert werden.
-  
-    - Hiermit können die Daten zwischen tsa und zueub915 synchronisiert werden: `rsync -r sadamov@tsa.cscs.ch:/scratch/sadamov/rstudio/CHAPo/vignettes/ext-data /prod/zue/climate/others/ads/CHAPo/vignettes/`
-  
-- Mit Regula (APK) die Definition von Mast- und Samenjahren besprechen.
-
-    - Simon: *Ich hätte eine generelle Frage zu den Pollenmodellierungen (gar nicht pressant): Mit den neuen Echtzeit-Daten möchten wir ja die modellierten Pollen-Konzentrationen laufend updaten. Ein Problem dabei sind die Mast- und Samenjahre für Betula und Alnus (beide folgen einem 2-Jahres-Rhythmus oder?). Poaceae und Ambrosia folgen ja keinem 2-Jahresrhythmus wenn ich das richtig verstehe. Wir haben nun theoretisch vor, nach den ersten Messungen in der Pollensaison die potentiell «emittierbare» Pollenmenge je nach Jahr und Spezies zu erhöhen oder erniedrigen. Nun zur Frage: Was denkst du, wie lange muss man messen um zu bestimmen ob Betula und Alnus in einem Mast- oder Samenjahr sind. Und falls möglich, wie lange müsste man messen um die Stärke der Pollensaison für diese Spezies noch genauer zu schätzen (also eigentlich einen SPI schätzen nach nur ein paar Tagen Emission)? Wäre super wenn sowas möglich ist.*   
-  Regula: *Da stellst du aber ein ganz schwierige Frage. Ich habe das noch nie so überlegt und auch nie Daten dazu angeschaut. Am besten machst du selber gewisse Untersuchungen, z.B. schauen wie der Pollenflug der ersten Tage mit dem SPIn oder der Anzahl Tage mit starkem und sehr starkem Pollenflug korreliert. Ab wieviel Tagen (oder ab wie viel Tagen mit mehr als 70 Pollen) wird die Korrelation besser? Was ich auch nicht genau weiss, ist, ob die Dauer der Pollensaison ebenfalls länger ist, wenn du ein starkes Jahr hast als bei einem schwachen. Was sicher ist, ist, dass bei einem späten Beginn der Birke die Saison eher kurz ist, bei einem frühen tendenziell länger. Aber bei anderen Arten ist das nicht unbedingt so. Wie hat das Modell von Teena mit der Vorhersage des SPIn funktioniert? Braucht Ihr wirklich eine langfristige Anpassung der Emissionskurve oder könnt Ihr diese laufend mit den gemessenen Daten während der Saison anpassen? Auch der 2-Jahreszyklus der Bäume ist nicht immer vorhanden und kann durch verschiedene Einflussfaktoren gestört werden.  Ich kann dir leider so spontan nicht weiter helfen.*
-  
-
 - Das gesamte Projekt darf nicht zu teuer werden (~ +5% computing cost)
-Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Dies ist 
+Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Aus diesem Grund sollte die Implementierung der Echtzeit-Daten nicht viel Resourcen beanspruchen. Qualität der Prognosen sollte also prioritär behandelt werden.
 
 # Nächste Schritte
  
-- Implementierung der variablen Felder Tempsummen-Felder und erste COSMO Runs
+- Implementierung der variablen Felder Tempsummen-Felder und erste COSMO Run
 - Finalisierung der Verifikations-Vignette
+- Mit Regula (APK) die Definition von Mastjahren besprechen.
 
+    - Simon: *Ich hätte eine generelle Frage zu den Pollenmodellierungen (gar nicht pressant): Mit den neuen Echtzeit-Daten möchten wir ja die modellierten Pollen-Konzentrationen laufend updaten. Ein Problem dabei sind die Mast- und Samenjahre für Betula und Alnus (beide folgen einem 2-Jahres-Rhythmus oder?). Poaceae und Ambrosia folgen ja keinem 2-Jahresrhythmus wenn ich das richtig verstehe. Wir haben nun theoretisch vor, nach den ersten Messungen in der Pollensaison die potentiell «emittierbare» Pollenmenge je nach Jahr und Spezies zu erhöhen oder erniedrigen. Nun zur Frage: Was denkst du, wie lange muss man messen um zu bestimmen ob Betula und Alnus in einem Mast- oder Samenjahr sind. Und falls möglich, wie lange müsste man messen um die Stärke der Pollensaison für diese Spezies noch genauer zu schätzen (also eigentlich einen SPI schätzen nach nur ein paar Tagen Emission)? Wäre super wenn sowas möglich ist.*   
+    Regula: *Da stellst du aber ein ganz schwierige Frage. Ich habe das noch nie so überlegt und auch nie Daten dazu angeschaut. Am besten machst du selber gewisse Untersuchungen, z.B. schauen wie der Pollenflug der ersten Tage mit dem SPIn oder der Anzahl Tage mit starkem und sehr starkem Pollenflug korreliert. Ab wieviel Tagen (oder ab wie viel Tagen mit mehr als 70 Pollen) wird die Korrelation besser? Was ich auch nicht genau weiss, ist, ob die Dauer der Pollensaison ebenfalls länger ist, wenn du ein starkes Jahr hast als bei einem schwachen. Was sicher ist, ist, dass bei einem späten Beginn der Birke die Saison eher kurz ist, bei einem frühen tendenziell länger. Aber bei anderen Arten ist das nicht unbedingt so. Wie hat das Modell von Teena mit der Vorhersage des SPIn funktioniert? Braucht Ihr wirklich eine langfristige Anpassung der Emissionskurve oder könnt Ihr diese laufend mit den gemessenen Daten während der Saison anpassen? Auch der 2-Jahreszyklus der Bäume ist nicht immer vorhanden und kann durch verschiedene Einflussfaktoren gestört werden.  Ich kann dir leider so spontan nicht weiter helfen.*
 
+# APPENDIX A: Technisches Setup
+
+!THIS IS HOW WE COSMO!
+
+	1. Initial Cosmo/INT2LM/FieldExtra Run: Run lm_for -f -e c1e 20 03 01 00 namelists_c1e_tsa in ~
+		a. In ~/.lm_env_c1e adjust runtime (leadtime)
+		b. Adjust GLOBAL, fieldextra_c and cosmo_c in ~/namelist_c1e_tsa/ if needed
+	2.  Go to newly created output in wd and if you like make a sandbox out of the important files with the create_sandbox.sh script in /store
+		a. In the script adjust the sandbox name.
+	3. Compile your own cosmo version in /scratch/sadamov/cosmo/ (from git)
+		a. Adjust the ./src/ files to your liking (i.e. pol_seasons.f90)
+		b. Run *gospacky* comman in ./ after running the spk command
+	4. Go into the sandbox directory created in step 2 and run *sbatch runscript* to run cosmo with the latest build (cosmo_gpu)
+		a. Option to change the leadtime hstop in INPUT_ORG
+	5. Run retrieve_pollen.sh in st/sandboxes to retrieve the pollen data from the sandbox in .csv format
+  6. Link to the sandbox .csv from step 5 and run the verification notebook in RStudio
 
 
 
