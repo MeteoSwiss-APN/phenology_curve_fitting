@@ -46,7 +46,7 @@ knitr::include_graphics("figures/parameters.png")
 
 Folgende Teilgebiete der Pollen-Implementierung könnten von den neuen Echtzeit-Daten profitieren und sind verantwortlich für den grössten Teil der Unsicherheiten in der numerischen Pollenvorhersage:
 
-- Phänologie: Beginn (und Ende) der Pollensaison von den real-time Pollendaten triggern (oder verhindern) lassen (z.B. via variables Feld der kritischen Temperatursummen)
+- Phänologie: Beginn (und Ende) der Pollensaison von den real-time Pollendaten triggern (oder verzögern) (z.B. via variables Feld der kritischen Temperatursummen)
 - Stärke der Pollensaison: Identifikation von Mastjahren und Anpassung der maximalen Emissions-Menge. Momentan wird ein konstanter tuning-faktor in einer namelist definiert. Diesen könnte man als variables Feld aufspannen (indirekte Skalierung der Verbreitungskarte) 
 
 Die modellierte Pollenkonzentration in der Luft kann dabei nicht einfach näher an die Messwerte gezogen werden (Nudging der Messwerte), da diese Information schnell verloren geht, vielmehr müssen Emissions-Parameter angepasst werden (Nudging der Parameter).
@@ -56,7 +56,7 @@ In Bezug auf das Diagramm oben kommen also Die folgenden beiden Parameter als Ka
 - Mathematical description of the course of the pollen season \\(f_{Q,seas}\\); wird dem Modell als Grid-Inputfeld bereit gestellt (Verbreitungskarte). Durch einen variablen Tunigfaktor könnte dieses Feld indirekt skaliert werden. 
 - Fraction of the grid box covered with the specific plant \\(f_{Q,cov}\\); Der zweite Parameter, die Saisonalität der Pollenphänologie, wird im Modul pol_seasons jeweils berechnet und kann direkt optimiert werden.
 
-Das übergeschaltete Modul im Pollen-Code heisst "organize_pollen", das eine grosse Anzahl Subroutinen des Pollen-Codes aufruft.
+Das übergeschaltete Modul im Pollen-Code heisst "organize_pollen", das eine grosse Anzahl Subroutinen des Pollen-Codes aufruft. 
 
 ```{r}
 knitr::include_graphics("figures/organize_pollen_cgraph.png")
@@ -64,118 +64,16 @@ knitr::include_graphics("figures/organize_pollen_cgraph.png")
 
 Die beiden oben genannten Parameter werden also über den folgenden Weg aufgerufen:
 
-- lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_zink (für \\(f_{Q,seas}\\))
+- lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_zink (für \\(f_{Q,cov}\\))
 - lmorg -> organize_pollen -> pol_seasons::calc_saisl (für \\(f_{Q,seas}\\))
 
-Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird.
-
-## Die Daten
-
-Die Echtzeit-Daten der Poleno-Geräte können im Modul data_pollen geladen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
-
-## Die Verbreitungskarte
-
-Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte Pol_tuning immer bei runtime definiert werden. Beispielsweise für Birke wurde bis anhin 1.0166E7_wp Konstanter Faktor definiert für das ganze Feld. Anhand dieses Faktors wird no_max_day, die maximale Anzahl emittierter Pollenkörner definiert.
-
-```{fortran eval = FALSE, echo = TRUE}
-! PLANT DEPENDENT VALUES FOR BIRCH
-! isp = 1
-!----------------------------------
-!     dp(lbetu) = 29._wp
-!     dd(lbetu) = 26._wp
-!     rhop(lbetu) = 751.6_wp
-!     d_min(lbetu) = 25._wp
-!     d_max(lbetu) = 27._wp
-      lai_plant(lbetu) = 3._wp
-      hcan(lbetu) = 22._wp
-
-! blooming time during the day:
-! Option to switch off emission during specified time.
-      tbloom(lbetu,:) = 1._wp              !1 = on, 0 = off
-      DO  l=6,18
-        tbloom(lbetu,l) = 1._wp
-      ENDDO
-
-!     num_pol(lbetu) = 8.944_wp*1.E6_wp
-      num_pol(lbetu) = 7.244_wp*1.E6_wp
-
-      tte(lbetu) = 281._wp
-      rhte(lbetu) = 0.6_wp
-      vbte(lbetu) = 2.9_wp
-      c1(lbetu) = 1._wp
-      c2(lbetu) = 1._wp
-      c3(lbetu) = 1._wp
-
-      ! start day for temperature sum minus 1. CAUTION: Day 1 is 1.Dec!
-      jul_days_excl(lbetu) = 40_iintegers   ! value from optimized start of flowering model
-                                           ! Definition of the start of flowering: Pollen>30
-
-      ! pollen-specific base temperature for temperature sum (in deg. C)
-      t_base(lbetu) = 9._wp            ! value from optimized start of flowering model
-                                           ! Definition of the start of flowering: Pollen>30
-
-      ! Maximum number of pollen that can be produced on one m2 during one day.
-      ! Estimation for birch: 1000xPOAC
-      ! overall tuning factor for Zink emission formula. 1.105: tuning for 2015 based on
-      ! CH stations 2014. 0.92: potential for birch pollen in 2015
-      !no_max_day(lbetu) = 1.105_wp*1.E9_wp*0.92_wp * pol_tuning(1)
-      no_max_day(lbetu) = 1.0166E7_wp * pol_tuning(1)
-
-      ! Maximum number of pollen is reached after 16 h under ideal conditions.
-      ! Estimation for birch: 1000xPOAC
-      no_max_timestep(lbetu) = no_max_day(lbetu)*dtpollen /(16._wp*3600._wp)
-
-      ! Loss of pollen from the reservoir due to random processes (Animals, ...) per timestep:
-      ! Half-life of 43200 seconds (= 12 hours) when only random processes exist.
-      ! was: Psi_others(lbetu) = log(2._wp) * dtpollen / (12._wp * 3600._wp)
-      !psi_others(lbetu) = exp(log(0.5_wp) * dtpollen / 43200._wp)
-      psi_random(lbetu) = exp(log(0.5_wp) * dtpollen / 43200._wp)
-
-      ! Suppression of emission in the aftermath of precipitation:
-      ! Evaporation set to 0 when rel. hum. is 100%
-      ! Drying needs x hours when rel. hum. is y%
-      ! Leads to the formula: coeff = x * (1 - y)
-      ! Here: coeff = 3 * (1 - 0.3) = 2.1
-      xi_r_precip(lbetu) = 1._wp !if set to 0, no suppression of emission after precipitation
-      frac_xi_evap(lbetu) = xi_r_precip(lbetu) * dtpollen / (2.1_wp * 3600._wp)
-```
-
-Im code oberhalb wird pol_tuning definiert und mit einem konstanten Wert für Birkenpollen multipliziert (anderer Wert für jede Spezies). Dadurch wird die Variable no_max_day definiert welche dann im pol_emissions Modul wieder aufgerufen wird. Wenn man nun diesen Tuning Faktor variabel für jede Gitterbox und jeden Zeitschritt definiert, kann die maximale Anzahl zu emittierender Pollenkörner max_emiss_day direkt angepasst werden.
-
-```{fortran eval = FALSE, echo = TRUE}
-!...........................................................
-  ! Biological influence:
-  !...........
-  ! Determines the maximum amount of pollen that can be produced per day.
-  ! The switch 'Phi_biol' is 1 if this amount hasnt been reached, and
-  ! turns to 0 as soon as the maximum possible amount has been released
-  ! from the flowers into the reservoir on a given day.
-  ! The value of this daily maximum depends on the time of year. Thus, the
-  ! calculation of 'Phi_biol' requires a description of the pollen season
-  ! which is called 'SDES'. 'SDES' is between 0 and 1, the
-  ! height of the maximum is determined by 'no_max_day'.
-  !...........
-  
-  
-  max_emiss_day = f_q_seas(i,j,isp) * no_max_day(isp) * &
-       f_q_cov(i,j,isp) * f_q_alt(i,j,isp)
-  
-  IF (res_new_sum(i,j,isp) .LT. max_emiss_day) THEN
-    phi_biol = 1._wp
-  ELSE
-    phi_biol = 0._wp
-  ENDIF
-
-    
-```
-
-Wie man im Code-Teil sehen kann, berechnet sich max_emiss_day anhand vierer Faktoren. Im ersten Schritt haben wir nun no_max_day verändert als Proxy-Skalierung der Verbreitungskarte. Als zweite Option bietet sich die die Variable \\(f_{Q,seas}\\) an.
+Das Modul pol_seasons wird momentan immer um 14:00 UTC aufgerufen während eines Modelllaufs, die Phänologie wird also nur einmal pro Tag aktualisiert. Das Modul pol_emissions wird alle 10-Minuten aufgerufen.
 
 ## Die Saisonalität
 
-Die mathematische Beschreibung der Pollensaison \\(f_{Q,seas}\\) ist dem phänologischen Modell entnommen, das für die operationellen numerischen Pollenvorhersagen an der MeteoSchweiz entwickelt wurde (vgl. Abschnitt 2.3.1). Es wird in beiden Modellkonfigurationen als Eingangsparameter für die Emissionsparametrisierung verwendet. Siehe Abschnitt 3.3.3 in Zinks Dissertation für weitere Informationen. [Zink, 2014]
+Die mathematische Beschreibung der Pollensaison \\(f_{Q,seas}\\) ist dem phänologischen Modell entnommen, das für die operationellen numerischen Pollenvorhersagen an der MeteoSchweiz entwickelt wurde. Es wird in beiden Modellkonfigurationen als Eingangsparameter für die Emissionsparametrisierung verwendet. Siehe Abschnitt 3.3.3 in Zinks Dissertation für weitere Informationen. [Zink, 2014]
 
-Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der letzten Subroutine des Modules, genannt calc_sdes könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnten zwei Temperatursummerfelder optimiert werden und variabel gemacht werden (tthrs_red and tthrs). Diese beiden Felder existieren bereits im Code sind aber zeitlich fixiert.
+Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der letzten Subroutine des Modules, genannt calc_sdes könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnten zwei Temperatursummerfelder optimiert werden und variabel gemacht werden (tthrs_red and tthrs). Diese beiden Felder existieren bereits im Code sind aber zeitlich fixiert. Sie werden in data_pollen definiert, in organize_pollen alloziert und in pol_seasons mit Inhalten gefüllt.
 
 ```{fortran eval = FALSE, echo = TRUE}
 MODULE pol_seasons
@@ -200,29 +98,132 @@ USE data_pollen,        ONLY: isp, isp_pollen, var_pollen, jul_days_excl, t_base
 
 SUBROUTINE calc_saisl(ierrstat)
 
-  ! The calculations of this subroutine use station data that are located on the whole domain.
+! initialize some allocated objects
+    t2m_norm_stns = REAL(array,wp)
+    stns_i   = NINT(header_info%grid_i,iintegers)
+    stns_j   = NINT(header_info%grid_j,iintegers)
+    stns_lon = REAL(header_info%longitude,wp)
+    stns_lat = REAL(header_info%latitude,wp)
   
-  CALL READ_ATAB(file,nrow,lablen,icol,fcol,ncol,rlabel,           &
-               iarray,farray,array,rclabel,ilabel,flabel,alabel, &
-               header_info,iostat,iomsg)
+  
+    ! calculate the length of the season at the 31 stations using a) saisn, b) ctsum,
+    ! c) clim. station t2m data gather fields to select t2m values at stations
+    CALL gather_field (tthrs_red(:,:,isp), ie,je, thr_s_tot, ie_tot,je_tot, -1, ierrstat)
 
-  ! calculate the length of the season at the 31 stations using a) saisn, b) ctsum,
-  ! c) clim. station t2m data gather fields to select t2m values at stations
-  CALL gather_field (ctsum    (:,:,isp), ie,je, ctsum_tot, ie_tot,je_tot, -1, ierrstat)
-  CALL gather_field (saisa    (:,:,isp), ie,je, saisa_tot, ie_tot,je_tot, -1, ierrstat)
-  CALL gather_field (tthrs_red(:,:,isp), ie,je, thr_s_tot, ie_tot,je_tot, -1, ierrstat)
-  CALL gather_field (tthre    (:,:,isp), ie,je, thr_e_tot, ie_tot,je_tot, -1, ierrstat)
+    ! get thresholds for ctsum at the stations from the whole field
+      thr_s_stns_tmp1(stn) = thr_s_tot(stns_i(stn),stns_j(stn))
+
+    thr_s_stns = SPREAD(thr_s_stns_tmp1, 2, tomorrow_end_clim)
+
+    ! Select t_2m climatology tomorrow to 31 May
+    t2m_clim_stns = t2m_norm_stns(:,nzjulianday - iarray(1,1) + 2 : size(iarray))
+  
+    ! Set t_2m < t_base(isp) to zero and calculate weighted temperature sum
+    WHERE (t2m_clim_stns < t_base(isp)) t2m_clim_stns = 0._wp
+  
+    ! length of the season = past days during season and coming days until end of season
+    saisl_stns = saisa_stns + SUM(sais_clim_stns, DIM=2)
+  
+    ! interpolate saisl_stns onto gridpoints with inverse distance weighting
+    stns_lon_rad = stns_lon * pi / 180.0_wp
+    stns_lat_rad = stns_lat * pi / 180.0_wp
+  
+    rlon_vec = RESHAPE(rlon,  (/ie*je,1/))
+    rlat_vec = RESHAPE(rlat,  (/ie*je,1/))
+  
+    DO grdpnt=1,ie*je
+      diff_lon = (rlon_vec(grdpnt,1) - stns_lon_rad) * COS(rlon_vec(grdpnt,1)) !XXXXXXXX BUG sollte rlat_vec sein
+      diff_lat = rlat_vec(grdpnt,1)  - stns_lat_rad
+      dist = sqrt(diff_lon * diff_lon + diff_lat * diff_lat)
+      ! inverse distance weighting
+      saisl_vec(grdpnt) =  SUM((1._wp/dist) * saisl_stns) / SUM(1._wp/dist)
+    END DO
+  
+    saisl(:,:,isp) = RESHAPE(saisl_vec, (/ie,je/))
 
 END SUBROUTINE calc_saisl
 
 ```
 
+Es wäre von Vorteil diese Routine häufiger als alle 24h auszuführen. Wenn man beispielswiese alle 3 Stunden diese Routine ausruft (also für jeden operationellen COSMO-1e Lauf), kann der Blühbeginn in Stationnähe ziemlich genau den Messungen angepasst werden.
+
+## Die Verbreitungskarte
+
+Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte eine tuning Faktor immer bei runtime definiert werden. Beispielsweise für Birke wurde bis anhin ein konstanter Faktor _pol_tuning(1)_ für das ganze Feld definiert (Definition in INPUT_POL namelist). Anhand dieses Faktors wird no_max_day, die maximale Anzahl zu emittierbarer Pollenkörner definiert (in organize_pollen Modul).
+
+```{fortran eval = FALSE, echo = TRUE}
+
+!+Source module for organizing the calls to the pollen packages
+!------------------------------------------------------------------------------
+
+SUBROUTINE organize_pollen (yaction, ydate_ini, ierror, yerrmsg)
+
+!------------------------------------------------------------------------------
+! Section 3: Initialization and input
+!------------------------------------------------------------------------------
+
+ELSEIF (yaction == 'init') THEN
+
+  ! Maximum number of pollen that can be produced on one m2 during one day.
+  ! Estimation for birch: 1000xPOAC
+  ! overall tuning factor for Zink emission formula. 1.105: tuning for 2015 based on
+  ! CH stations 2014. 0.92: potential for birch pollen in 2015
+  !no_max_day(lbetu) = 1.105_wp*1.E9_wp*0.92_wp * pol_tuning(1)
+  no_max_day(lbetu) = 1.0166E7_wp * pol_tuning(1)
+  
+  ! Maximum number of pollen is reached after 16 h under ideal conditions.
+  ! Estimation for birch: 1000xPOAC
+  no_max_timestep(lbetu) = no_max_day(lbetu)*dtpollen /(16._wp*3600._wp)
+
+
+
+```
+
+Im Code oberhalb wird pol_tuning abgerufen und mit einem konstanten Wert für Birkenpollen multipliziert (anderer Wert für jede Spezies). Dadurch wird die Variable no_max_day definiert welche dann im pol_emissions Modul wieder aufgerufen wird. Wenn man nun diesen Tuning Faktor variabel für jede Gitterbox und jeden Zeitschritt definiert, kann die maximale Anzahl zu emittierender Pollenkörner max_emiss_day direkt angepasst werden.
+
+```{fortran eval = FALSE, echo = TRUE}
+
+!+Source module for pollen emissions
+!------------------------------------------------------------------------------
+
+MODULE pol_emissions
+
+  SUBROUTINE emiss_p
+
+    !...........................................................
+    ! Biological influence:
+    !...........
+    ! Determines the maximum amount of pollen that can be produced per day.
+    ! The switch 'Phi_biol' is 1 if this amount hasnt been reached, and
+    ! turns to 0 as soon as the maximum possible amount has been released
+    ! from the flowers into the reservoir on a given day.
+    ! The value of this daily maximum depends on the time of year. Thus, the
+    ! calculation of 'Phi_biol' requires a description of the pollen season
+    ! which is called 'SDES'. 'SDES' is between 0 and 1, the
+    ! height of the maximum is determined by 'no_max_day'.
+    !...........
+    
+    
+    max_emiss_day = f_q_seas(i,j,isp) * no_max_day(isp) * &
+         f_q_cov(i,j,isp) * f_q_alt(i,j,isp)
+    
+    IF (res_new_sum(i,j,isp) .LT. max_emiss_day) THEN
+      phi_biol = 1._wp
+    ELSE
+      phi_biol = 0._wp
+    ENDIF
+
+    
+```
+
+Das Feld der Tuningfaktoren müsste extern bereitgestellt werden (analog zu den kritischen Temperatursummen oben). Dieses wird dann auch für jeden Modelllauf neu berechnet werden (also alle 3h).
+
 # Interpolation
 
-Wir werden also zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Während der Implementierung könnte man folgenden Updates vornehmen, in zunehmender Komplexität:
+Wir werden also zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Im Sinne der Transparenz, sollten beide Felder separat betrachtet werden. Während der Implementierung könnte man folgende Updates vornehmen, in zunehmender Komplexität:
 
 - Die kritischen Temperatursummmen für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden.
-- In einem nächsten Schritt könnte man zudem Transport-Ereignisse berücksichtigen und die Einzugsgebiete der Messstationen genauer definiert werden. Vorallem für das naheliegende Ausland könnte dies relevant sein (z.B. Transportereignisse von Ambrosia-Pollen von Frankreich).
+- In einem nächsten Schritt könnte man zudem Transport-Ereignisse berücksichtigen und die Einzugsgebiete der Messstationen genauer definieren. Vorallem für das naheliegende Ausland könnte dies relevant sein (z.B. Transportereignisse von Ambrosia-Pollen von Frankreich). Dies könnte beim tuning Faktor eine wichtige Rolle spielen. 
 - Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische Wariablen wie zum Beisiel Wind berücksichtigt werden.
 
 Für den zweiten und dritten Punkt könnten folgende Resourcen hilfreich sein:
@@ -232,21 +233,36 @@ Für den zweiten und dritten Punkt könnten folgende Resourcen hilfreich sein:
 - Kriging um die bodennahen Messwerte vorherzusagen und die Ähnlichkeit zu den umliegenden Messstationen zu berechnen.
 - https://opengeohub.org/machine-learning-spatial-data für ML Approaches
 
-Herausforderungen und offene Fragen:
+Herausforderungen:
 
 - Topographie in Alpen wird potentiell problematisch, da nicht sehr viele Fallen zur Verfügung stehen.
-- Wie stark verzögert, wie häufig und in welchem Radius sollen die Emissions-Parameter angepasst werden?
+- Gebiete, die zu weit weg sind von einer Messstation werden je nach Methode nicht von den Echtzeit-Daten profitieren können. Im Ausland könnte dies problematisch werden.
 
 # Validation
 
-- Die statistische Vergleichsstudie von Hirst und Poleno Fallen von APK sollte hier hilfreich sein.
-- Welche Validations-Metriken sollen verwendet werden (evtl. auch kategorische)?
-    - Erste Methoden sind nun verfügbar, sowohl numerisch als auch kategorischer Natur. Die Kategorien müssten aber noch für jede Spezies definiert werden.
-- Soll man Hirst oder Poleno als Ground-Truth anerkennen? 
-    - Nur Hirst kommt wirklich in Frage, da auf den Jahren 2017-2020 getestet und getuned wird und Poleno ja erst ab 2021 verfügbar sein wird.
-- Zu welchen Zeitpunkten im Jahr soll verifiziert werden?
-- Momentan werden Prognosen für 4 Spezies berechnet (Erle, Birke, Gräser, Ambrosia). Werden eventuell noch zusätzliche Spezies analysiert? 
-    - Dies ist momentan nicht Priorität und hängt direkt mit den benötigten Rechenresourcen zusammen.
+Um die verschiedenen Implementierungen der variablen Felder zu vergleichen, muss eine robuste statistische Analyse durchgeführt werden. Basierend auf den Jahren 2017-2020 (COSMO-1 Pollendaten verfügbar) werden verschiedene Implementierungen miteinander verglichen. Als Ground-Truth werden die Hirst Pollenmessungen aus dem DWH verwendet. Sobald genügend Poleno Messungen verfügbar sind, sollte die Modell-Kalibrierung nachgeholt werden. Denn erste Vergleiche zeigten, dass Poleno genauere Messungen als Hirst produziert, vorallem für tiefere Konzentrationen.
+
+Für die Vergleiche der Modelle und Messungen werden verschiedene Metriken definiert (in Anlehnung an die statistische Vergleichsstudie von Hirst und Poleno Fallen von APK). Für die kategorische Auswertung der Pollenbelastung werden die "allergenic potentials" verwendet (https://confluence.meteoswiss.ch/display/APW/Aide+pollen). Zudem werden verschiende visuelle Vergleichsmethoden angewendet.
+
+Visuelle Methoden:
+
+- Correlations-Plot (rank-based and linear)
+- Altman-Bland Plots
+- Boxplots der relativen Differenzen
+
+Numerische Metriken (Gewichtung noch nicht bekannt):
+
+- R^2
+- MSE
+- RMSE
+- MAE
+
+Kategorische Metriken
+
+- 
+
+Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn nötig angepasst werden.
+
 
 # Anforderungen
 
@@ -255,6 +271,8 @@ Herausforderungen und offene Fragen:
    - Für das DWH steht die Pipeline und die Messdaten sind direkt in R verfügbar auf tsa (cscs) und zueub915.
   
     - Das Skript (fieldextra namelist) um die modellierten Pollen-Konzentration von 2017-2020 (Modell-Beginn)abzurufen existiert und ist fast durchgelaufen. Allerdings müsste dieses evtl. noch angepasst werden um Stundenmittelwerte anstatt punktuelle Messwerte abzurufen.
+
+Die Echtzeit-Daten der Poleno-Geräte können im Modul data_pollen geladen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
   
     - Dani meinte, dass eine Stunde Verspätung noch okay ist. Dies könnte knapp werden, wenn man das Paper von Galley (2020) berücksichtigt wo anscheinend 3h-Verzögerung beobachtet wurde. *Die KENDA Datenassimilation wird stündlich gerechnet, und es wird ein cut_off von 45min eingehalten. D.h. die Analyse startet frühestens 45min nach der Analysenzeit (also eine 00UTC Analyse wird erst um 00:45UTC gerechnet). Dies, damit genügend Beobachtungen in der Datenbank sind, denn diese brauchen eine bestimmte Zeit, bis sie hier ankommen. Wenn du die Pollendaten in COSMO-1E einbringen möchtest, ist das ein bisschen anders: Wie Du sagst, starten die COSMO-1E Vorhersagen alle 3h und immer um ca Analysezeit plus 1h (die zugehörige KENDA Analyse braucht noch ca 15min). Die Pollenbeobachtungen müssten also um Analysezeit + 1h verfügbar sein, damit sie in COSMO-1E verwendet werden können. Also z.B. für die 00UTC COSMO-1E Vorhersage müssten die Pollenbeobachtungen spätestens um 01UTC vorhanden sein. Beachte, dass unser Schedule immer in UTC läuft und in Sommer- und Winterzeit eine Stunde verschoben in Localtime ist!*
   
@@ -273,10 +291,12 @@ Herausforderungen und offene Fragen:
   
 
 - Das gesamte Projekt darf nicht zu teuer werden (~ +5% computing cost)
+Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Dies ist 
 
 # Nächste Schritte
  
-Implementierung der variablen Felder und erste COSMO Runs! :-)
+- Implementierung der variablen Felder Tempsummen-Felder und erste COSMO Runs
+- Finalisierung der Verifikations-Vignette
 
 
 
