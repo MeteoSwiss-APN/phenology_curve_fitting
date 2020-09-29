@@ -225,6 +225,11 @@ Das Feld der Tuningfaktoren müsste extern bereitgestellt werden (analog zu den 
 Wir werden also zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Im Sinne der Transparenz, sollten beide Felder separat betrachtet werden. Während der Implementierung könnte man folgende Updates vornehmen, in zunehmender Komplexität:
 
 - Die kritischen Temperatursummmen für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden.
+
+```{r out.width="75%"}
+knitr::include_graphics("figures/map.png")
+```
+
 - In einem nächsten Schritt könnte man zudem Transport-Ereignisse berücksichtigen und die Einzugsgebiete der Messstationen genauer definieren. Vorallem für das naheliegende Ausland könnte dies relevant sein (z.B. Transportereignisse von Ambrosia-Pollen von Frankreich). Dies könnte beim tuning Faktor eine wichtige Rolle spielen. 
 - Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische Wariablen wie zum Beisiel Wind berücksichtigt werden.
 
