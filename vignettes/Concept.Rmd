@@ -1,8 +1,10 @@
 ---
 title: "Projekt CHAPo Konzept- Implementierung der Echtzeit-Daten in die Prognosemodelle"
 author: "Simon Adamov"
-date: "2020-09-29"
-output: html_document
+date: '2020-09-29'
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r echo = FALSE}
@@ -247,8 +249,27 @@ Für die Vergleiche der Modelle und Messungen werden verschiedene Metriken defin
 Visuelle Methoden:
 
 - Correlations-Plot (rank-based and linear)
+
+```{r}
+knitr::include_graphics("figures/corr_plot.png")
+```
+
 - Altman-Bland Plots
+
+```{r}
+knitr::include_graphics("figures/altman-bland.png")
+```
+- Density Plots
+
+```{r}
+knitr::include_graphics("figures/density_plot.png")
+```
+
 - Boxplots der relativen Differenzen
+
+```{r}
+knitr::include_graphics("figures/diff_boxplot.png")
+```
 
 Numerische Metriken (Gewichtung noch nicht bekannt):
 
@@ -257,9 +278,18 @@ Numerische Metriken (Gewichtung noch nicht bekannt):
 - RMSE
 - MAE
 
-Kategorische Metriken
+Kategorische Metriken (Gewichtung noch nicht bekannt):
 
-- 
+- Confusion Matrix
+- Kappa
+- Sensitivity
+- Specificity       
+- Pos Pred Value    
+- Neg Pred Value    
+- Prevalence        
+- Detection Rate      
+- Detection Prevalence
+- Balanced Accuracy  
 
 Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn nötig angepasst werden.
 
@@ -290,18 +320,18 @@ Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten
 
 !THIS IS HOW WE COSMO!
 
-	1. Initial Cosmo/INT2LM/FieldExtra Run: Run lm_for -f -e c1e 20 03 01 00 namelists_c1e_tsa in ~
-		a. In ~/.lm_env_c1e adjust runtime (leadtime)
-		b. Adjust GLOBAL, fieldextra_c and cosmo_c in ~/namelist_c1e_tsa/ if needed
-	2.  Go to newly created output in wd and if you like make a sandbox out of the important files with the create_sandbox.sh script in /store
-		a. In the script adjust the sandbox name.
-	3. Compile your own cosmo version in /scratch/sadamov/cosmo/ (from git)
-		a. Adjust the ./src/ files to your liking (i.e. pol_seasons.f90)
-		b. Run *gospacky* comman in ./ after running the spk command
-	4. Go into the sandbox directory created in step 2 and run *sbatch runscript* to run cosmo with the latest build (cosmo_gpu)
-		a. Option to change the leadtime hstop in INPUT_ORG
-	5. Run retrieve_pollen.sh in st/sandboxes to retrieve the pollen data from the sandbox in .csv format
-  6. Link to the sandbox .csv from step 5 and run the verification notebook in RStudio
+1. Initial Cosmo/INT2LM/FieldExtra Run: Run lm_for -f -e c1e 20 03 01 00 namelists_c1e_tsa in ~
+	a. In ~/.lm_env_c1e adjust runtime (leadtime)
+	b. Adjust GLOBAL, fieldextra_c and cosmo_c in ~/namelist_c1e_tsa/ if needed
+2.  Go to newly created output in wd and if you like make a sandbox out of the important files with the create_sandbox.sh script in /store
+	a. In the script adjust the sandbox name.
+3. Compile your own cosmo version in /scratch/sadamov/cosmo/ (from git)
+	a. Adjust the ./src/ files to your liking (i.e. pol_seasons.f90)
+	b. Run *gospacky* comman in ./ after running the spk command
+4. Go into the sandbox directory created in step 2 and run *sbatch runscript* to run cosmo with the latest build (cosmo_gpu)
+	a. Option to change the leadtime hstop in INPUT_ORG
+5. Run retrieve_pollen.sh in st/sandboxes to retrieve the pollen data from the sandbox in .csv format
+6. Link to the sandbox .csv from step 5 and run the verification notebook in RStudio
 
 
 
