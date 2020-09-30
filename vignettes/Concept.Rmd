@@ -26,11 +26,12 @@ Im Projekt CHAPo werden automatische Pollenmessgeräte auf dem ganzem Gebiet der
 
 - Welche Parameter / Funktionen sollen von der neuen Daten Assimilation profitieren?
 - Wie häufig soll der jeweilige Parameter / Funktion an die momentanen Messwerte angepasst werden?
+- Welche Methode («Anpassung an die Messwerte») soll angewendet werden (z.B. wie lange zurück, welche Grenzwerte)?
 - Kann dieselbe Methode für mehrere relevante Pollentaxa verwendet werden?
-- Wie soll räumlich zwischen den rund 40 Stationen interpoliert werden?
+- Wie soll räumlich zwischen den 14 Schweizer Stationen interpoliert werden? Sollte das Umland mit einbezogen werden?
 - Wie kann die Güte der neuen Methoden überprüft werden (was dient als "Ground-Truth")?
 - Welche externen Schnittstellen und Anhängigkeiten existieren und sollten definiert werden?
-- Wie viel zusätzliche Computing-Ressourcen werden benötigt?
+- Wie viel zusätzliche Computing-Ressourcen werden benötigt? Wie häufig pro Tag dürfen die Pollen gerechnet werden?
 
 # Module und Parameter
 
@@ -69,7 +70,7 @@ Die beiden oben genannten Parameter werden also über den folgenden Weg aufgeruf
 - lmorg -> organize_pollen -> pol_emissions::emiss_p -> emiss_formula_zink (für \\(f_{Q,cov}\\))
 - lmorg -> organize_pollen -> pol_seasons::calc_saisl (für \\(f_{Q,seas}\\))
 
-Das Modul pol_seasons wird momentan immer um 14:00 UTC aufgerufen während eines Modelllaufs, die Phänologie wird also nur einmal pro Tag aktualisiert. Das Modul pol_emissions wird alle 10-Minuten aufgerufen.
+Das Modul pol_seasons wird momentan immer um 14:00 UTC aufgerufen während eines Modelllaufs, die Phänologie wird also nur einmal pro Tag aktualisiert. Das Modul pol_emissions wird in jedem Zeitschritt aufgerufen.
 
 ## Die Saisonalität
 
@@ -218,7 +219,7 @@ MODULE pol_emissions
     
 ```
 
-Das Feld der Tuningfaktoren müsste extern bereitgestellt werden (analog zu den kritischen Temperatursummen oben). Dieses sollte dann auch für jeden Modelllauf neu berechnet werden (also alle 3h).
+Das Feld der Tuningfaktoren müsste initial extern bereitgestellt werden (analog zu den kritischen Temperatursummen oben). Im operationellen Modus kann es aber vom Vorlauf geerbt und allenfalls leicht angepasst werden. Bei der Anpassung sollte das Feld nicht allzu stark verändert werden, um die Kontinuität der Pollenprognosen zu gewährleisten. Dies ist erfüllt wenn immer alle verfügbare Messdaten der bisherigen Saison für die Berechnung verwendet wird.
 
 # Interpolation
 
@@ -299,7 +300,7 @@ Kategorische Metriken (Gewichtung noch nicht bekannt):
 Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn nötig angepasst werden.
 
 
-# Anforderungen
+# Anforderungen an real-time Pollendaten
 
 - Die Echtzeit-Daten der Poleno-Geräte können mit der Funktion retrieve_cscs abgerufen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
 
@@ -310,7 +311,7 @@ Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn n�
     - Gian: *Die Zeitliche Verzögerung über die Schnittstelle am Rohdatenserver ist im Bereich weniger Minuten ( 0-5 min vielleicht). Die Verzögerung in der operationellen Kette übers DWH kennen wir noch nicht da sich diese noch im Aufbau befindet, aber es ist geplant alle 10 Minuten Daten zu liefern. Es werden Pollenkonzentrationen ins DWH übermittelt (10minuten Werte und Stündliche Werte). Die Rohdaten (Events mit Timestamp) werden nur im Rohdatenserver archiviert*
   
 - Das gesamte Projekt darf nicht zu teuer werden (~ +5% computing cost)
-Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Aus diesem Grund sollte die Implementierung der Echtzeit-Daten nicht viel Resourcen beanspruchen. Qualität der Prognosen darf also prioritär behandelt werden.
+Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Aus diesem Grund sollte die Implementierung der Echtzeit-Daten nicht viel Resourcen beanspruchen. Die Qualität der Prognosen darf also prioritär behandelt werden. Sollte sich allerdings zeigen, dass die Pollen häufiger als alle 24h (jeweils um 03:00 UTC in COSMO-1e) gerechnet werden müssen, um von den Echtzeitdaten zu profitieren, würde dies sehr direkt höhere Resourcen verlangen. Es wird sich in den Experimenten zeigen, ob eine häufigere Einschaltung des Pollenmoduls notwendig sein wird. COSMO-2e rechnet bereits jetzt jeden Modelllauf mit Pollen.
 
 # Nächste Schritte
  
