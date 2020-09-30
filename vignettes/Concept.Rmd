@@ -22,15 +22,15 @@ knitr::opts_chunk$set(echo = FALSE,
 
 # Einleitung
 
-Im Projekt CHAPo werden automatische Pollenmessgeräte auf dem ganzem Gebiet der Schweiz installiert. Diese neuartigen Fallen werden von der Firma Swisens produziert und tragen den Namen Poleno. Der grosse Vorteil für die Prognose-Modelle liegt in der Verfügbarkeit der Daten; diese werden ab 2021 in Echtzeit an das Rechenzentrum der Meteoschweiz gesendet. Zudem konnten die Poleno Fallen in einem ersten Vergleich auch zeigen, dass sie bereits bei geringeren Pollen-Konzentrationen robuste Messungen ermöglichen. In bisherigen Analysen wurden die Messorte für die neuen Fallen und wichtige Meilensteine des Projekt CHAPo definiert. Dieses Dokument soll nun aufweisen inwiefern die Prognose-Modelle (z.B. COSMO-1e) am meisten von den neuen Daten profitieren können. Dazu werden Module und Code-Stellen der Cosmo Code-Datenbank ausgewählt, die am ehesten von den zeitlich höher aufgelösten Daten profitieren könnten. Des Weiteren soll dieses Dokumen folgende Fragestellungen näher beleuchten:
+Im Projekt CHAPo werden automatische Pollenmessgeräte auf dem ganzem Gebiet der Schweiz installiert (https://www.meteoschweiz.admin.ch/content/dam/meteoswiss/de/Mess-und-Prognosesysteme/Bodenstationen/Pollenmessnetz/doc/Factsheet_Automatisierung_Pollenmessnetz_DE_final.pdf). Diese neuartigen Fallen werden von der Firma Swisens produziert und tragen den Namen Poleno. Der grosse Vorteil für die Prognose-Modelle liegt in der Verfügbarkeit der Daten; diese werden ab 2021 in Echtzeit an das Rechenzentrum der Meteoschweiz gesendet. Zudem konnten die Poleno Fallen in einem ersten Vergleich auch zeigen, dass sie bereits bei geringeren Pollen-Konzentrationen robuste Messungen ermöglichen. In bisherigen Analysen wurden die Messorte für die neuen Fallen und wichtige Meilensteine des Projekt CHAPo definiert. Dieses Dokument soll nun aufweisen inwiefern die Prognose-Modelle (z.B. COSMO-1e) am meisten von den neuen Daten profitieren können. Dazu werden Module und Code-Stellen der Cosmo Code-Datenbank ausgewählt, die am ehesten von den Daten in Echtzeit profitieren könnten. Dazu sollen folgende Fragestellungen näher diskutiert werden:
 
 - Welche Parameter / Funktionen sollen von der neuen Daten Assimilation profitieren?
-- Wie häufig soll der jeweilge Parameter / Funktion an die momentanen Messwerte angepasst werden?
-- Kann dieselbe Methode für alle relevanten Pollentaxa verwendet werden?
+- Wie häufig soll der jeweilige Parameter / Funktion an die momentanen Messwerte angepasst werden?
+- Kann dieselbe Methode für mehrere relevante Pollentaxa verwendet werden?
 - Wie soll räumlich zwischen den rund 40 Stationen interpoliert werden?
 - Wie kann die Güte der neuen Methoden überprüft werden (was dient als "Ground-Truth")?
 - Welche externen Schnittstellen und Anhängigkeiten existieren und sollten definiert werden?
-- Wie viel zusätzliche Computing-Resourcen werden benötigt?
+- Wie viel zusätzliche Computing-Ressourcen werden benötigt?
 
 # Module und Parameter
 
@@ -48,15 +48,15 @@ knitr::include_graphics("figures/parameters.png")
 
 Folgende Teilgebiete der Pollen-Implementierung könnten von den neuen Echtzeit-Daten profitieren und sind verantwortlich für den grössten Teil der Unsicherheiten in der numerischen Pollenvorhersage:
 
-- Phänologie: Beginn (und Ende) der Pollensaison von den real-time Pollendaten triggern (oder verzögern) (z.B. via variables Feld der kritischen Temperatursummen)
-- Stärke der Pollensaison: Identifikation von Mastjahren und Anpassung der maximalen Emissions-Menge. Momentan wird ein konstanter tuning-faktor in einer namelist definiert. Diesen könnte man als variables Feld aufspannen (indirekte Skalierung der Verbreitungskarte) 
+- Phänologie: Beginn (und Ende) der Pollensaison von den real-time Pollendaten triggern (oder verzögern)
+- Stärke der Pollensaison: Identifikation von Mastjahren und Anpassung der maximalen Emissions-Menge. 
 
 Die modellierte Pollenkonzentration in der Luft kann dabei nicht einfach näher an die Messwerte gezogen werden (Nudging der Messwerte), da diese Information schnell verloren geht, vielmehr müssen Emissions-Parameter angepasst werden (Nudging der Parameter).
 
 In Bezug auf das Diagramm oben kommen also Die folgenden beiden Parameter als Kandidaten für Echtzeit Anpassungen in Frage:
 
-- Mathematical description of the course of the pollen season \\(f_{Q,seas}\\); wird dem Modell als Grid-Inputfeld bereit gestellt (Verbreitungskarte). Durch einen variablen Tunigfaktor könnte dieses Feld indirekt skaliert werden. 
-- Fraction of the grid box covered with the specific plant \\(f_{Q,cov}\\); Der zweite Parameter, die Saisonalität der Pollenphänologie, wird im Modul pol_seasons jeweils berechnet und kann direkt optimiert werden.
+- Mathematische Beschreibung der Pollen-Saison \\(f_{Q,seas}\\); Die Saisonalität der Pollenphänologie, wird im Modul pol_seasons jeweils berechnet und kann direkt optimiert werden indem die kritischen Temperatursummen laufend angepasst werden.
+- Anteil der Gitterbox der mit der spezifischen Pflanze bedeckt ist \\(f_{Q,cov}\\); wird dem Modell als Grid-Inputfeld bereit gestellt (Verbreitungskarte). Momentan wird ein konstanter Tuning-Faktor in der Namelist INPUT_POL definiert. Diesen könnte man als variables Feld aufspannen. Durch einen variablen Tuningfaktor könnte dieses Feld indirekt skaliert werden. 
 
 Das übergeschaltete Modul im Pollen-Code heisst "organize_pollen", das eine grosse Anzahl Subroutinen des Pollen-Codes aufruft. 
 
@@ -75,7 +75,7 @@ Das Modul pol_seasons wird momentan immer um 14:00 UTC aufgerufen während eines
 
 Die mathematische Beschreibung der Pollensaison \\(f_{Q,seas}\\) ist dem phänologischen Modell entnommen, das für die operationellen numerischen Pollenvorhersagen an der MeteoSchweiz entwickelt wurde. Es wird in beiden Modellkonfigurationen als Eingangsparameter für die Emissionsparametrisierung verwendet. Siehe Abschnitt 3.3.3 in Zinks Dissertation für weitere Informationen. [Zink, 2014]
 
-Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der letzten Subroutine des Modules, genannt calc_sdes könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnten zwei Temperatursummerfelder optimiert werden und variabel gemacht werden (tthrs_red and tthrs). Diese beiden Felder existieren bereits im Code sind aber zeitlich fixiert. Sie werden in data_pollen definiert, in organize_pollen alloziert und in pol_seasons mit Inhalten gefüllt.
+Im Modul pol_seasons wird \\(f_{Q,seas}\\) bereit gestellt. In der Subroutine *calc_saisl* des Modules könnten die zuvor geladenen Echtzeit-Daten implementiert werden. An dieser Stelle könnte das Temperatursummerfeld *tthrs_red* optimiert und variabel gemacht werden. Dieses Feld existiert bereits im Code ist aber zeitlich fixiert. Das Feld wird in data_pollen definiert, in organize_pollen alloziert und in pol_seasons mit Inhalten gefüllt. Das neue Setup ist vergleichbar mit der Art und Weise wie das Feld saisl unten berechnet wird.
 
 ```{fortran eval = FALSE, echo = TRUE}
 MODULE pol_seasons
@@ -147,11 +147,11 @@ END SUBROUTINE calc_saisl
 
 ```
 
-Es wäre von Vorteil diese Routine häufiger als alle 24h auszuführen. Wenn man beispielswiese alle 3 Stunden diese Routine ausruft (also für jeden operationellen COSMO-1e Lauf), kann der Blühbeginn in Stationnähe ziemlich genau den Messungen angepasst werden.
+Es wäre von Vorteil diese Routine häufiger als alle 24h auszuführen. Wenn man beispielswiese alle 3 Stunden diese Routine ausruft (also für jeden operationellen COSMO-1e Lauf), kann der Blühbeginn in Stationnähe ziemlich genau den Messungen angepasst werden. Jeweils basierend auf den letzten X-Stunden vor initial time wird für alle Stationen verglichen: Hat die Blühsaison im Modell oder in der Realität bereits begonnen. Sollten im Modell an Station X die kritischen Temperatursummen bereits erreicht worden sein, es wurden aber noch keine Pollen gemessen für diese Station, können diese Grenzwerte hochgesetzt werden (Verzögerung des Blühbeginns im Modell). In ähnlichem Vorgehen können die kritischen Summen heruntergesetzt werden, falls in Realität bereits Pollen gemessen werden, das Modell aber noch nicht mit der Emission begonnen hat.
 
 ## Die Verbreitungskarte
 
-Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte eine tuning Faktor immer bei runtime definiert werden. Beispielsweise für Birke wurde bis anhin ein konstanter Faktor _pol_tuning(1)_ für das ganze Feld definiert (Definition in INPUT_POL namelist). Anhand dieses Faktors wird no_max_day, die maximale Anzahl zu emittierbarer Pollenkörner definiert (in organize_pollen Modul).
+Wie oben erwähnt wird nicht die Karte direkt skaliert sondern viel eher könnte ein Tuning-Faktor immer bei runtime gewählt werden. Beispielsweise für Birke (siehe unten) wurde bis anhin ein konstanter Faktor *pol_tuning(1)* für das ganze Feld definiert (in INPUT_POL namelist). Anhand dieses Faktors wird no_max_day, die maximale Anzahl zu emittierbarer Pollenkörner festgelegt (im organize_pollen Modul).
 
 ```{fortran eval = FALSE, echo = TRUE}
 
@@ -218,36 +218,36 @@ MODULE pol_emissions
     
 ```
 
-Das Feld der Tuningfaktoren müsste extern bereitgestellt werden (analog zu den kritischen Temperatursummen oben). Dieses wird dann auch für jeden Modelllauf neu berechnet werden (also alle 3h).
+Das Feld der Tuningfaktoren müsste extern bereitgestellt werden (analog zu den kritischen Temperatursummen oben). Dieses sollte dann auch für jeden Modelllauf neu berechnet werden (also alle 3h).
 
 # Interpolation
 
-Wir werden also zwei Gitterfelder berechnen für die Implementierung der Echtzeit Daten. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und variabel berechnet. Im Sinne der Transparenz, sollten beide Felder separat betrachtet werden. Während der Implementierung könnte man folgende Updates vornehmen, in zunehmender Komplexität:
+Wir werden für die Implementierung der Echtzeit Daten also zwei Gitterfelder berechnen. Zum einen werden wir das kritische Temperatursummenfeld variabel berechnen. Zum anderen wird der Tuningparameter für no_max_day auf ein Gitterfeld aufgespannt und ebenfalls variabel berechnet. Im Sinne der Transparenz, sollten beide Felder separat betrachtet werden (also keine gleichzeitige Optimierung - beispielsweise mit ML-Methoden). Während der Implementierung könnte man folgende Updates vornehmen, in zunehmender Komplexität:
 
-- Die kritischen Temperatursummmen für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden.
+- Die kritischen Temperatursummmen für den Blühbeginn werden in einem Umkreis um die Messtationen hoch- oder runter korrigiert je nachdem ob tatsächlich schon Pollen gemessen werden. Die kozentrischen Kreise können dadurch gerechtfertigt werden, dass die kritische Temperatursumme für den Blühbeginn nicht von der Topographie (MüM) abhängt. Dabei werden die Mess-Grenzwerte so definiert, dass nur lokale Emissionen und keine Transportereignisse berücksichtigt werden. Der optimale Radius der Kreise muss experimentell bestimmt werden.
 
 ```{r out.width="75%"}
 knitr::include_graphics("figures/map.png")
 ```
 
 - In einem nächsten Schritt könnte man zudem Transport-Ereignisse berücksichtigen und die Einzugsgebiete der Messstationen genauer definieren. Vorallem für das naheliegende Ausland könnte dies relevant sein (z.B. Transportereignisse von Ambrosia-Pollen von Frankreich). Dies könnte beim tuning Faktor eine wichtige Rolle spielen. 
-- Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische Wariablen wie zum Beisiel Wind berücksichtigt werden.
+- Falls noch mehr Zeit vorhanden sein wird, könnte man mit Kriging oder ML-Methoden die Interpolation überarbeiten. Momentan wird mit inverse distance weighting gearbeitet. Anhand von räumlicher Regression könnten Einflussgebiete der Messtationen besser verstanden und aktualisiert werden. Dabei könnten verschiedene meteorologische Wariablen wie zum Beisiel Wind berücksichtigt werden.
 
 Für den zweiten und dritten Punkt könnten folgende Resourcen hilfreich sein:
 
-- Die Clusteranalyse von APK um grobe Einzugsgebiete der Fallen abzuschätzen.
+- Die Clusteranalyse von APK um grobe Einzugsgebiete der Fallen abzuschätzen (https://www.meteoschweiz.admin.ch/content/dam/meteoswiss/de/Ungebundene-Seiten/Publikationen/Fachberichte/doc/ab237.pdf).
 - ML vs. Standard Methoden: Spatial Statistics mit räumlichen und zeitlichen Autokorrelationen (Andreas Papritz).
 - Kriging um die bodennahen Messwerte vorherzusagen und die Ähnlichkeit zu den umliegenden Messstationen zu berechnen.
 - https://opengeohub.org/machine-learning-spatial-data für ML Approaches
 
 Herausforderungen:
 
-- Topographie in Alpen wird potentiell problematisch, da nicht sehr viele Fallen zur Verfügung stehen.
-- Gebiete, die zu weit weg sind von einer Messstation werden je nach Methode nicht von den Echtzeit-Daten profitieren können. Im Ausland könnte dies problematisch werden.
+- Topographie in Voralpen wird potentiell problematisch, da nicht sehr viele Fallen zur Verfügung stehen.
+- Gebiete, die zu weit weg sind von einer Messstation werden je nach Methode nicht von den Echtzeit-Daten profitieren können. Vor allem im Ausland könnte dies problematisch werden.
 
 # Validation
 
-Um die verschiedenen Implementierungen der variablen Felder zu vergleichen, muss eine robuste statistische Analyse durchgeführt werden. Basierend auf den Jahren 2017-2020 (COSMO-1 Pollendaten verfügbar) werden verschiedene Implementierungen miteinander verglichen. Als Ground-Truth werden die Hirst Pollenmessungen aus dem DWH verwendet. Sobald genügend Poleno Messungen verfügbar sind, sollte die Modell-Kalibrierung nachgeholt werden. Denn erste Vergleiche zeigten, dass Poleno genauere Messungen als Hirst produziert, vorallem für tiefere Konzentrationen.
+Um die verschiedenen Implementierungen der variablen Felder zu vergleichen, muss eine robuste statistische Analyse durchgeführt werden. Basierend auf den Jahren 2017-2020 (COSMO-1 Pollendaten verfügbar) werden verschiedene Implementierungen miteinander verglichen. Als Ground-Truth werden die Hirst Pollenmessungen aus dem DWH verwendet. Sobald genügend Poleno Messungen verfügbar sind, sollte die Modell-Kalibrierung nachgeholt werden. Denn erste Vergleiche zeigten, dass Poleno genauere Messungen als Hirst produziert, vorallem für tiefere Konzentrationen. Zudem werden die Poleno-Geräte in einer breit anlegten Studie mit METAS, genau kalibriert. Bei Hirst muss hingegen mit varrierenden Saugraten gerechnet werden.
 
 Für die Vergleiche der Modelle und Messungen werden verschiedene Metriken definiert (in Anlehnung an die statistische Vergleichsstudie von Hirst und Poleno Fallen von APK). Für die kategorische Auswertung der Pollenbelastung werden die "allergenic potentials" verwendet (https://confluence.meteoswiss.ch/display/APW/Aide+pollen). Zudem werden verschiende visuelle Vergleichsmethoden angewendet.
 
@@ -301,7 +301,7 @@ Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn n�
 
 # Anforderungen
 
-- Die Echtzeit-Daten der Poleno-Geräte können mit der Funktion retrieve_cscs abgerufen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden. Dani fragen (APN), welche Verzögerung noch in Ordnung ist.
+- Die Echtzeit-Daten der Poleno-Geräte können mit der Funktion retrieve_cscs abgerufen werden. MDS ist verantwortlich für eine technisch robuste Bereitstellung der Messungen. Momentan werden die Pollen-Messungen nicht für die Prognose verwendet. Eine Pipeline dafür muss also zuerst errichtet und die Schnittstellen definiert werden.
 
     - Für das DWH steht die Pipeline und die DWH-Messdaten sind direkt in R verfügbar auf tsa (cscs) und zueub915.
 
@@ -310,12 +310,12 @@ Am Ende jeder Pollensaison, sollte das Modell zukünftig überprüft und wenn n�
     - Gian: *Die Zeitliche Verzögerung über die Schnittstelle am Rohdatenserver ist im Bereich weniger Minuten ( 0-5 min vielleicht). Die Verzögerung in der operationellen Kette übers DWH kennen wir noch nicht da sich diese noch im Aufbau befindet, aber es ist geplant alle 10 Minuten Daten zu liefern. Es werden Pollenkonzentrationen ins DWH übermittelt (10minuten Werte und Stündliche Werte). Die Rohdaten (Events mit Timestamp) werden nur im Rohdatenserver archiviert*
   
 - Das gesamte Projekt darf nicht zu teuer werden (~ +5% computing cost)
-Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Aus diesem Grund sollte die Implementierung der Echtzeit-Daten nicht viel Resourcen beanspruchen. Qualität der Prognosen sollte also prioritär behandelt werden.
+Da wir im Emissionsteil arbeiten werden, genügt es die Gitterboxen am nächsten am Boden zu berücksichtigen (2D-Raster). Die kostspielige 3D Simulation passiert erst im nächsten Schritt, der in diesem Projekt nicht abgeändert wird. Aus diesem Grund sollte die Implementierung der Echtzeit-Daten nicht viel Resourcen beanspruchen. Qualität der Prognosen darf also prioritär behandelt werden.
 
 # Nächste Schritte
  
-- Implementierung der variablen Felder Tempsummen-Felder und erste COSMO Run
-- Finalisierung der Verifikations-Vignette
+- Implementierung der variablen Felder Tempsummen-Felder und erste COSMO Run - wie weit zurück sollten die Daten verwendet werden und in welchem Radius um die Stationen sollte das Update vorgenommen werden?
+- Finalisierung der Verifikations-Vignette und Auswahl/Gewichtung der Metriken
 - Mit Regula (APK) die Definition von Mastjahren besprechen.
 
     - Simon: *Ich hätte eine generelle Frage zu den Pollenmodellierungen (gar nicht pressant): Mit den neuen Echtzeit-Daten möchten wir ja die modellierten Pollen-Konzentrationen laufend updaten. Ein Problem dabei sind die Mast- und Samenjahre für Betula und Alnus (beide folgen einem 2-Jahres-Rhythmus oder?). Poaceae und Ambrosia folgen ja keinem 2-Jahresrhythmus wenn ich das richtig verstehe. Wir haben nun theoretisch vor, nach den ersten Messungen in der Pollensaison die potentiell «emittierbare» Pollenmenge je nach Jahr und Spezies zu erhöhen oder erniedrigen. Nun zur Frage: Was denkst du, wie lange muss man messen um zu bestimmen ob Betula und Alnus in einem Mast- oder Samenjahr sind. Und falls möglich, wie lange müsste man messen um die Stärke der Pollensaison für diese Spezies noch genauer zu schätzen (also eigentlich einen SPI schätzen nach nur ein paar Tagen Emission)? Wäre super wenn sowas möglich ist.*   
