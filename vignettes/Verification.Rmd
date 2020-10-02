@@ -1,0 +1,82 @@
+---
+title: "Verification"
+author: "Simon Adamov"
+date: "September 30, 2020"
+output: html_document
+---
+
+```{r}
+# DEFINE YOUR COSMO-OUTPUT FOLDER HERE
+
+
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE,
+                      fig.retina =3,
+                      fig.width = 10,
+                      fig.height = 7,
+                      out.width = "100%",
+                      out.height = "100%")
+
+
+library(mchdwh)
+if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
+library(dplyr)
+library(readr)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(scales)
+library(psych)
+library(caret)
+library(lubridate)
+library(padr)
+library(tsibble)
+library(feasts)
+library(fabletools)
+library(kableExtra)
+library(ggpubr)
+# These themes just look great :-)
+library(ggthemr)
+# devtools::install_github('cttobin/ggthemr')
+ggthemr("fresh")
+
+devtools::load_all(".")
+
+library(conflicted)
+conflict_prefer(name = "select", winner = "dplyr")
+conflict_prefer(name = "filter", winner = "dplyr")
+conflict_prefer(name = "lag", winner = "dplyr")
+conflict_prefer(name = "rescale", winner = "scales")
+
+# remotes::install_version("caTools", version = "1.17.1.1")
+# This library is needed for visual representation of missing data
+# library(Amelia)
+# remotes::install_version("foreign", version = "0.8-71")
+# install.packages("Amelia")
+
+
+```
+
+This vignette can be used "operationally" in the pollen model verification pipeline. The intent is to compare one or multiple timeseries of pollen concentrations predicted by different COMOS-devbuild with the measurements from the DWH. Based on various studies about the reliability of Hirst trap measurements daily averages are used. (Well to start with we use hourly, as we don't model full days).
+
+```{r}
+load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
+```
+
+
+
+
+
+
+
+
+
+
+
