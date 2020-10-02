@@ -18,8 +18,8 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
   }
 
   data_plot <- data_plot %>%
-    filter(taxon == !!taxon,
-           station == !!station,
+    filter(taxon %in% !!taxon,
+           station %in% !!station,
            measurement == "concentration")
 
   if (rm_zeros){
@@ -32,6 +32,9 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
   alpha_plot <- 0.5
 
   gg1 <- data_plot %>%
+    group_by(type, datetime) %>%
+    summarise(value = mean(value)) %>%
+    ungroup %>%
     ggplot(aes(x = datetime)) +
     geom_line(aes(y = value, col = type, alpha = alpha_plot)) +
     theme(legend.position = "none") +
@@ -39,7 +42,7 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
 
   gg2 <- data_plot %>%
     ggplot() +
-    geom_boxplot(aes(y = log10(value), fill = type), alpha = alpha_plot) +
+    geom_boxplot(aes(y = log10(value + 1), fill = type), alpha = alpha_plot) +
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
@@ -47,7 +50,7 @@ plot_comb <- function(taxon, station, resolution, rm_zeros, combined){
 
   gg3 <- data_plot %>%
     ggplot() +
-    geom_histogram(aes(y = log10(value), fill = type), alpha = alpha_plot, binwidth = 0.1) +
+    geom_histogram(aes(y = log10(value + 1), fill = type), alpha = alpha_plot, binwidth = 0.1) +
     # geom_label(data = sd_hirst, aes(label = paste("Standard Deviation:\n", round(sd), "Pollen / m³"), x = 8, y = 3.3, group = type), size = 3) +
     facet_wrap(vars(type), ncol = 1) +
     theme(legend.position = "bottom") +
