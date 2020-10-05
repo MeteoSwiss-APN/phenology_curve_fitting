@@ -420,3 +420,258 @@ gg_timeseries
 ```
 
 
+# Correlation
+
+The correlation between the measurements and modeled data can be calculated easily.
+As we are only comparing two sets of data, mutliple testing is not a problem here.
+
+Careful the correlation coefficients method have some serious shortcomings:
+
+The correlation coefficient measures linear agreement--whether the measurements go up-and-down together. Certainly, we want the measures to go up-and-down together, but the correlation coefficient itself is deficient in at least three ways as a measure of agreement. (http://www.jerrydallal.com/LHSP/compare.htm)
+
+- The correlation coefficient can be close to 1 (or equal to 1!) even when there is considerable bias between the two methods. For example, if one method gives measurements that are always 10 units higher than the other method, the correlation will be 1 exactly, but the measurements will always be 10 units apart.
+- The magnitude of the correlation coefficient is affected by the range of subjects/units studied. The correlation coefficient can be made smaller by measuring samples that are similar to each other and larger by measuring samples that are very different from each other. The magnitude of the correlation says nothing about the magnitude of the differences between the paired measurements which, when you get right down to it, is all that really matters.
+- The usual significance test involving a correlation coefficient-- whether the population value is 0--is irrelevant to the comparability problem. What is important is not merely that the correlation coefficient be different from 0. Rather, it should be close to (ideally, equal to) 1! 
+
+## Pearson, Spearman and Kendall Correlation
+
+A good summary of the methods and their shortcomings can be found here: https://www.statisticssolutions.com/correlation-Pearson-Kendall-spear man/
+
+Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the two sets of data.
+
+```{r}
+
+methods <- c("pearson", "spearman", "kendall")
+
+data_corr <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
+  mutate(value = log10(value + 1)) %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
+  select(value, type, datetime, station, taxon) %>% 
+  pivot_wider(names_from = type, values_from = value)
+
+data_corr_exp <- data_daily_comb %>% 
+  filter(measurement == "concentration") %>% 
+  select(value, type, datetime, station, taxon) %>% 
+  pivot_wider(names_from = type, values_from = value)
+
+corr_matrix <- map(methods, ~corr.test(
+  data_corr %>% select(-datetime, -station, -taxon),
+  # use = "complete", # There should be only complete observations
+  method = .x,
+  # adjust = "holm",
+  alpha = .05,
+  ci = TRUE,
+  minlength = 5
+  ))
+
+```
+
+```{r }
+
+max_val <- max(data_corr_exp$Cosmo, na.rm = TRUE)
+
+ggthemr("fresh")
+ci <- map(corr_matrix, ~.x %>% 
+  pluck(10)) %>% 
+  bind_rows() %>% 
+  round(2) %>% 
+  mutate(method = methods,
+         metric = c("R-", "rho-", "tau-"),
+         ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
+         x = rep(max_val * 0.1, times = 3),
+         y = c(max_val, max_val * 0.95, max_val * 0.9))
+
+gg_corr <- data_corr_exp %>% 
+  ggplot(aes(x = Hirst, y = Cosmo)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(alpha = 0.1) +  # The smoother is dependent on the scale (i.e. log or not) and rather confusing than helping
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
+  geom_label(data = ci, aes(label = ci, x = x, y = y), parse = TRUE) +
+  scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]", limits = c(0, max_val)) +
+  scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", limits = c(0, max_val))
+  # coord_cartesian(ylim = c(10, 500), xlim = c(10, 500))  +
+  # scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000)) +
+  # scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]",trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000))
+
+title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
+
+gg_corr <- ggarrange(gg_corr) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between measured and modelled data; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+
+# ggsave(filename = paste0(here::here(), "/vignettes/figures/corr_plot.png"), gg_corr, width = 12, height = 8)
+gg_corr
+
+```
+
+Comparison Plots
+
+## Concentration Categories Diff-Plots
+
+For the concentrations we are looking at some density plots and histograms to start with and then we look at the relative differences from the common mean of the three traps.
+
+```{r}
+data_altman <- data_corr %>% 
+    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+                          rowSums(.[4:5], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff = Hirst - Cosmo)
+
+data_altman_exp <- data_corr_exp %>% 
+    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+                          rowSums(.[4:5], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff = Hirst - Cosmo)
+```
+
+This is how concentration classes are defined based on their allergenic potential.
+
+```{r }
+
+categs <- c("weak", "medium", "strong", "verystrong")
+
+data_conc <- data_altman_exp %>% 
+  filter(mean >= 1) %>% 
+  mutate(conc = case_when(
+            taxon == "Alnus" & mean >= 1 & mean <= 10 ~ "weak",
+            taxon == "Alnus" & mean >= 11 & mean <= 69 ~ "medium",
+            taxon == "Alnus" & mean >= 70 & mean <= 249~ "strong",
+            taxon == "Alnus" & mean >= 250 ~ "verystrong",
+            taxon == "Betula" & mean >= 1 & mean <= 10 ~ "weak",
+            taxon == "Betula" & mean >= 11 & mean <= 69 ~ "medium",
+            taxon == "Betula" & mean >= 70 & mean <= 299 ~ "strong",
+            taxon == "Betula" & mean >= 300 ~ "verystrong",
+            taxon == "Poaceae" & mean >= 1 & mean <= 19 ~ "weak",
+            taxon == "Poaceae" & mean >= 20 & mean <= 49 ~ "medium",
+            taxon == "Poaceae" & mean >= 50 & mean <= 149~ "strong",
+            taxon == "Poaceae" & mean >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & mean >= 1 & mean <= 5 ~ "weak",
+            taxon == "Ambrosia" & mean >= 6 & mean <= 10 ~ "medium",
+            taxon == "Ambrosia" & mean >= 11 & mean <= 39 ~ "strong",
+            taxon == "Ambrosia" & mean >= 40 ~ "verystrong"
+  )) %>% 
+  pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>% 
+  pivot_wider(names_from = conc, values_from = value)
+
+gg_conc_dens <- list()
+gg_conc_hist <- list()
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+# labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012) # For 2-hours
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- categs
+names(labels_y_hist) <- categs
+
+for (j in categs){
+  if (j %in% names(data_conc)){
+     obs <- data_conc %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/2) %>% 
+    pull 
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_dens[[j]] <- data_conc %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
+    coord_cartesian(xlim = c(0, NA)) 
+  }
+}
+
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens) %>% 
+  annotate_figure(top = paste("Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups."),
+                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. \n It is basically a smoothed histogram. The buckets are defined based on the mean.", color = swatch()[1], face = "italic", size = 10))
+
+gg_dens_conc
+
+# ggsave(filename = paste0(here::here(), "/vignettes/figures/density_plot.png"), gg_dens_conc, width = 12, height = 8)
+
+
+```
+
+```{r}
+
+data_conc_plot <- data_conc %>% 
+  pivot_longer(categs[categs %in% names(data_conc)], names_to = "group", values_to = "value") %>% 
+  mutate(group = factor(group, levels = categs[categs %in% names(data_conc)]),
+         reldiff = diff / mean) %>% 
+  filter(!is.na(value))
+
+means <- data_conc_plot %>% 
+  group_by(group, type) %>% 
+  summarise(mean = mean(reldiff))
+
+gg_boxplot_reldiff <- data_conc_plot %>% 
+  ggplot(aes(x = group, y = reldiff)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_point(data = means, aes(x = group, y = mean), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
+  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) +
+  facet_wrap(~ taxon)
+
+gg_boxplot_reldiff
+
+# ggsave(filename = paste0(here::here(), "/vignettes/figures/diff_boxplot.png"), gg_boxplot_reldiff, width = 12, height = 8)
+
+
+```
+
+```{r eval = FALSE}
+diff_selection <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
+taxon_avail <- diff_selection[diff_selection %in% unique(data_conc_plot$taxon)]
+
+kable_diff <- map(diff_selection,
+    ~data_conc_plot %>% 
+    filter(taxon %in% .x) %>%
+    group_by(group, type) %>% 
+    summarise(q25 = quantile(reldiff, probs = 0.25, na.rm = TRUE),
+              median = median(reldiff, na.rm = TRUE),
+              q75 = quantile(reldiff, probs = 0.75, na.rm = TRUE)) %>% 
+    ungroup %>% 
+    group_by(group) %>% 
+    summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
+    ungroup) %>% 
+  bind_rows
+
+kable_diff %>% 
+  mutate(taxon = rep(taxon_avail, each = nrow(kable_diff) / length(taxon_avail)),
+         taxon = cell_spec(taxon, angle = 270, align = "center")) %>% 
+  mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
+  select(taxon, everything()) %>% 
+  setNames(c("Species", "Class", "25%-Quantile", "Median", "75%-Quantile")) %>% 
+  kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  collapse_rows(columns = 1)
+
+```
+
+## Altman-Bland Plots
+
+The well established AB-method for clinical trials can be used here as well to compare the means and differences between the two data sets. Again we see that XXX generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence XXX can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
+
+```{r}
+
+sd_diff <- data_altman %>% 
+  summarise(sd_diff = sd(diff, na.rm = TRUE)) %>% 
+  pull(sd_diff)
+
+gg_ab1 <- data_altman %>% 
+  filter(!is.na(diff)) %>% 
+  ggplot(aes(x = mean, y = diff)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(min(data_altman$mean), max(data_altman$mean)), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
+  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(Hirst - Cosmo)", x = "Mean(Hirst, Cosmo)") +
+  facet_wrap(~taxon)
+
+title <- "Altman-Bland Plot to Compare Measured and Modelled Pollen Concentrations"
+
+gg_altman <- ggarrange(gg_ab1) %>%
+  annotate_figure(top = title, bottom = text_grob("Pairwise comparison of traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+
+gg_altman
+# ggsave(filename = paste0(here::here(), "/vignettes/figures/altman-bland.png"), gg_altman, width = 12, height = 8)  
+
+```
