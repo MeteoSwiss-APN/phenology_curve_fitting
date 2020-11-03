@@ -8,7 +8,7 @@ output: html_document
 ```{r}
 # DEFINE YOUR COSMO-OUTPUT FOLDER HERE
 
-cosmo_path <- paste0(here::here(), "/vignettes/ext-data/cosmo_orig_20200303_24h.csv")
+cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_20200315.csv")
 
 ```
 
@@ -334,10 +334,6 @@ data_daily_comb <- data_daily_imp %>%
 
 data_hourly_comb <- data_hourly_imp %>% 
   bind_rows(data_hourly_cosmo_imp)
-
-data_hourly_comb %>% 
-  filter(type == "Hirst",
-         taxon == "Alnus")
 
 ```
 
@@ -674,4 +670,74 @@ gg_altman <- ggarrange(gg_ab1) %>%
 gg_altman
 # ggsave(filename = paste0(here::here(), "/vignettes/figures/altman-bland.png"), gg_altman, width = 12, height = 8)  
 
+```
+
+# Model Validation
+## Numerical
+
+http://www.sthda.com/english/articles/38-regression-model-validation/158-regression-model-accuracy-metrics-r-square-aic-bic-cp-and-more/
+
+```{r}
+data_conc_plot %>% 
+  pivot_wider(names_from = type, values_from = value) %>% 
+  summarise(
+    R2 = cor(Hirst, Cosmo, use = "complete.obs")^2,
+    MSE = mean((Hirst - Cosmo)^2, na.rm = TRUE),
+    RMSE = sqrt(MSE),
+    MAE = mean(abs(Hirst - Cosmo), na.rm = TRUE)
+  )
+
+```
+
+## Categorical
+
+http://www.sthda.com/english/articles/36-classification-methods-essentials/143-evaluation-of-classification-model-accuracy-essentials/
+
+https://towardsdatascience.com/the-5-classification-evaluation-metrics-you-must-know-aa97784ff226
+
+https://towardsdatascience.com/multi-class-metrics-made-simple-part-i-precision-and-recall-9250280bddc2
+```{r}
+data_valid <- data_altman_exp %>% 
+  mutate(conc_hirst = case_when(
+            taxon == "Alnus" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+            taxon == "Alnus" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+            taxon == "Alnus" & Hirst >= 70 & Hirst <= 249~ "strong",
+            taxon == "Alnus" & Hirst >= 250 ~ "verystrong",
+            taxon == "Betula" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+            taxon == "Betula" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+            taxon == "Betula" & Hirst >= 70 & Hirst <= 299 ~ "strong",
+            taxon == "Betula" & Hirst >= 300 ~ "verystrong",
+            taxon == "Poaceae" & Hirst >= 1 & Hirst <= 19 ~ "weak",
+            taxon == "Poaceae" & Hirst >= 20 & Hirst <= 49 ~ "medium",
+            taxon == "Poaceae" & Hirst >= 50 & Hirst <= 149~ "strong",
+            taxon == "Poaceae" & Hirst >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & Hirst >= 1 & Hirst <= 5 ~ "weak",
+            taxon == "Ambrosia" & Hirst >= 6 & Hirst <= 10 ~ "medium",
+            taxon == "Ambrosia" & Hirst >= 11 & Hirst <= 39 ~ "strong",
+            taxon == "Ambrosia" & Hirst >= 40 ~ "verystrong"
+          ),
+         conc_cosmo = case_when(
+            taxon == "Alnus" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+            taxon == "Alnus" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+            taxon == "Alnus" & Cosmo >= 70 & Cosmo <= 249~ "strong",
+            taxon == "Alnus" & Cosmo >= 250 ~ "verystrong",
+            taxon == "Betula" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+            taxon == "Betula" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+            taxon == "Betula" & Cosmo >= 70 & Cosmo <= 299 ~ "strong",
+            taxon == "Betula" & Cosmo >= 300 ~ "verystrong",
+            taxon == "Poaceae" & Cosmo >= 1 & Cosmo <= 19 ~ "weak",
+            taxon == "Poaceae" & Cosmo >= 20 & Cosmo <= 49 ~ "medium",
+            taxon == "Poaceae" & Cosmo >= 50 & Cosmo <= 149~ "strong",
+            taxon == "Poaceae" & Cosmo >= 150 ~ "verystrong",
+            taxon == "Ambrosia" & Cosmo >= 1 & Cosmo <= 5 ~ "weak",
+            taxon == "Ambrosia" & Cosmo >= 6 & Cosmo <= 10 ~ "medium",
+            taxon == "Ambrosia" & Cosmo >= 11 & Cosmo <= 39 ~ "strong",
+            taxon == "Ambrosia" & Cosmo >= 40 ~ "verystrong"
+         )
+  ) %>% 
+  filter(!is.na(conc_hirst),
+         !is.na(conc_cosmo)) %>% 
+  mutate_at(vars(conc_hirst, conc_cosmo), ~factor(., levels = c("weak", "medium", "strong", "verystrong")))
+  
+confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
 ```
