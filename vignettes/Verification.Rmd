@@ -8,7 +8,7 @@ output: html_document
 ```{r}
 # DEFINE YOUR COSMO-OUTPUT FOLDER HERE
 
-cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_20200315.csv")
+cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
 
 ```
 
@@ -25,7 +25,7 @@ knitr::opts_chunk$set(echo = FALSE,
                       out.height = "100%")
 
 
-library(mchdwh)
+library(mchdwh) # renv will not find MCHRAN, please install manually
 if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
 library(dplyr)
 library(readr)

@@ -33,7 +33,7 @@ library(tsibble)
 library(feasts)
 library(fabletools)
 library(kableExtra)
-library(ggpubr)
+library(ggpubr) # old version
 # These themes just look great :-)
 library(ggthemr)
 # devtools::install_github('cttobin/ggthemr')
