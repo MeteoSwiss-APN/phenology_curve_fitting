@@ -9,10 +9,10 @@ output:
 
 ```{r echo = FALSE}
 knitr::opts_chunk$set(echo = FALSE,
-                      error = FALSE, 
-                      warning = FALSE, 
+                      error = FALSE,
+                      warning = FALSE,
                       message = FALSE,
-                      fig.retina =3,
+                      fig.retina = 3,
                       fig.width = 10,
                       fig.height = 7,
                       fig.align = "center",

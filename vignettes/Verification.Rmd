@@ -14,15 +14,17 @@ cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE,
-                      error = FALSE, 
-                      warning = FALSE, 
-                      message = FALSE,
-                      fig.retina =3,
-                      fig.width = 10,
-                      fig.height = 7,
-                      out.width = "100%",
-                      out.height = "100%")
+knitr::opts_chunk$set(
+  echo = FALSE,
+  error = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.retina = 3,
+  fig.width = 10,
+  fig.height = 7,
+  out.width = "100%",
+  out.height = "100%"
+)
 
 
 library(mchdwh) # renv will not find MCHRAN, please install manually
@@ -43,8 +45,9 @@ library(fabletools)
 library(kableExtra)
 library(ggpubr)
 # These themes just look great :-)
+# Download from devtools::install_github('cttobin/ggthemr')
 library(ggthemr)
-# devtools::install_github('cttobin/ggthemr')
+
 ggthemr("fresh")
 
 devtools::load_all(".")
@@ -54,13 +57,6 @@ conflict_prefer(name = "select", winner = "dplyr")
 conflict_prefer(name = "filter", winner = "dplyr")
 conflict_prefer(name = "lag", winner = "dplyr")
 conflict_prefer(name = "rescale", winner = "scales")
-
-# remotes::install_version("caTools", version = "1.17.1.1")
-# This library is needed for visual representation of missing data
-# library(Amelia)
-# remotes::install_version("foreign", version = "0.8-71")
-# install.packages("Amelia")
-
 
 ```
 
@@ -199,7 +195,7 @@ stations <-
       "Locarno",
       # "Balerna",
       "Lugano"
-      ),
+    ),
     cosmo_station = c(
       "CHDAVO",
       "CHBUCH",
@@ -224,31 +220,51 @@ stations <-
 
 ```{r}
 data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
-  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>% # setting na during import failed for some reason
+  # setting na during import failed for some reason
+  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
   pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%
-  mutate(measurement = case_when(str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
-                                 str_detect(PARAMETER, pattern = "fe") ~ "emission",
-                                 TRUE ~ "concentration"),
-         PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")) %>%
+  mutate(
+    measurement = case_when(
+      str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
+      str_detect(PARAMETER, pattern = "fe") ~ "emission",
+      TRUE ~ "concentration"
+    ),
+    PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")
+  ) %>%
   inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
   inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
-  mutate(datetime = ymd_h(paste0(YYYY, sprintf("%02d", MM), sprintf("%02d", DD), sprintf("%02d", hh))),
-         date = date(datetime),
-         hour = hour(datetime),
-         type = "Cosmo") %>%
-  # filter(between(datetime, as_datetime("2017-03-02 00:01:00"), as_datetime("2020-08-19 00:00:00"))) %>%
+  mutate(
+    datetime = ymd_h(paste0(
+      YYYY, sprintf("%02d", MM),
+      sprintf("%02d", DD),
+      sprintf("%02d", hh)
+    )),
+    date = date(datetime),
+    hour = hour(datetime),
+    type = "Cosmo"
+  ) %>%
+  filter(between(
+    datetime, as_datetime("2017-03-02 00:01:00"),
+    as_datetime("2020-08-19 00:00:00")
+  )) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
 
 ```
 
 ```{r}
-data_daily_cosmo <- data_cosmo %>% 
-  group_by(taxon, station, date, type, measurement) %>% 
-  summarise(value = mean(value, na.rm = TRUE)) %>% # Currently the values are not averaged per hour but simply retrieved at every hour.
-  ungroup %>% 
-  mutate(hour = 0,
-         # date = date + days(1), # Depends on the definition
-         datetime = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))))
+data_daily_cosmo <- data_cosmo %>%
+  group_by(taxon, station, date, type, measurement) %>%
+  # Values are not averaged per hour but simply retrieved at every hour
+  summarise(value = mean(value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(
+    hour = 0,
+    # date = date + days(1), # Depends on the definition
+    datetime = ymd_hm(paste0(
+      as.character(date),
+      paste0(sprintf("%02d", hour), ":00")
+    ))
+  )
 ```
 
 # Missing Data and Imputation
@@ -260,16 +276,19 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 ## Padding
 
 ```{r}
-
 data_hourly_imp <- data$data_hourly %>%
-  filter(between(datetime, min(data_cosmo$datetime), max(data_cosmo$datetime))) %>%
+  filter(between(
+    datetime,
+    min(data_cosmo$datetime),
+    max(data_cosmo$datetime)
+  )) %>%
   pad(
-    start_val =  min(data_cosmo$datetime),
+    start_val = min(data_cosmo$datetime),
     end_val = max(data_cosmo$datetime),
     group = c("station", "taxon"),
     by = "datetime",
     break_above = 2
-  ) %>% 
+  ) %>%
   mutate(
     date = date(datetime),
     hour = hour(datetime),
@@ -281,12 +300,12 @@ data_hourly_imp <- data$data_hourly %>%
 data_daily_imp <- data$data_daily %>%
   filter(between(datetime, min(data_cosmo$date), max(data_cosmo$date))) %>%
   pad(
-    start_val =  min(data_cosmo$date),
+    start_val = min(data_cosmo$date),
     end_val = max(data_cosmo$date),
     group = c("station", "taxon"),
     by = "datetime",
     break_above = 2
-  ) %>% 
+  ) %>%
   mutate(
     date = date(datetime),
     hour = hour(datetime),
@@ -295,16 +314,18 @@ data_daily_imp <- data$data_daily %>%
     value = if_else(is.na(value), 0, value)
   )
 
-data_hourly_cosmo_imp <- data_cosmo %>% 
-  filter(between(datetime, min(data_cosmo$datetime), max(data_cosmo$datetime)),
-         measurement == "concentration") %>%
+data_hourly_cosmo_imp <- data_cosmo %>%
+  filter(
+    between(datetime, min(data_cosmo$datetime), max(data_cosmo$datetime)),
+    measurement == "concentration"
+  ) %>%
   pad(
-    start_val =  min(data_cosmo$datetime),
+    start_val = min(data_cosmo$datetime),
     end_val = max(data_cosmo$datetime),
     group = c("station", "taxon"),
     by = "datetime",
     break_above = 2
-  ) %>% 
+  ) %>%
   mutate(
     date = date(datetime),
     hour = hour(datetime),
@@ -312,49 +333,55 @@ data_hourly_cosmo_imp <- data_cosmo %>%
     measurement = "concentration",
     value = if_else(is.na(value), 0, value)
   )
-  
+
 data_daily_cosmo_imp <- data_daily_cosmo %>%
-  filter(measurement == "concentration") %>% 
+  filter(measurement == "concentration") %>%
   pad(
-    start_val =  min(data_cosmo$date),
+    start_val = min(data_cosmo$date),
     end_val = max(data_cosmo$date),
     group = c("station", "taxon", "measurement"),
     by = "datetime",
     break_above = 2
-  ) %>% 
+  ) %>%
   mutate(
     date = date(datetime),
     hour = hour(datetime),
     type = "Cosmo",
     value = if_else(is.na(value), 0, value)
   )
-  
+
 data_daily_comb <- data_daily_imp %>%
   bind_rows(data_daily_cosmo_imp)
 
-data_hourly_comb <- data_hourly_imp %>% 
+data_hourly_comb <- data_hourly_imp %>%
   bind_rows(data_hourly_cosmo_imp)
 
 ```
 
 
 ```{r}
-plot_comb(taxon = "Alnus", station = stations$station, resolution = "Daily", combined = TRUE, rm_zeros = FALSE)
+plot_comb(
+  taxon = "Alnus",
+  station = stations$station,
+  resolution = "Daily",
+  combined = TRUE,
+  rm_zeros = FALSE
+)
 ```
 
 
 ```{r }
 
-occurence <- data_daily_comb %>% 
-  group_by(taxon, station, type) %>% 
-  summarise(value = sum(value != 0)) %>% 
-  ungroup() %>% 
+occurence <- data_daily_comb %>%
+  group_by(taxon, station, type) %>%
+  summarise(value = sum(value != 0)) %>%
+  ungroup() %>%
   mutate(metric = "occurence")
 
-maximum <- data_daily_comb %>% 
-  group_by(taxon, station, type) %>% 
-  summarise(value = max(value)) %>% 
-  ungroup() %>% 
+maximum <- data_daily_comb %>%
+  group_by(taxon, station, type) %>%
+  summarise(value = max(value)) %>%
+  ungroup() %>%
   mutate(metric = "maximum")
 
 average <- data_daily_comb %>% # This would need a season definition
@@ -363,56 +390,68 @@ average <- data_daily_comb %>% # This would need a season definition
   ungroup() %>%
   mutate(metric = "average")
 
-spi <- data_daily_comb %>% 
-  group_by(taxon, station, type) %>% 
-  summarise(value = sum(value)) %>% 
-  ungroup() %>% 
+spi <- data_daily_comb %>%
+  group_by(taxon, station, type) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
   mutate(metric = "spi")
-
-# metrics <- bind_rows(occurence, maximum, average, spi)
 
 create_kable(occurence, title = "Occurence of Pollen [Days]")
 create_kable(maximum, title = "Maximum Pollen Concentration [m⁻³]")
 create_kable(average, title = "Average Pollen Concentration [m⁻³]")
 create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
-
 ```
 
 
 ```{r fig.height=6, fig.width=9}
 
-# stations_selected <- "Zürich" # Check stations tibble for all available locations
-taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia") # Check species tibble for all available pollen taxa
+# Check stations tibble for all available locations
+stations_selected <- "Zürich"
+# Check species tibble for all available pollen taxa
+taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
 gg_timeseries <- list()
 
-for (s in stations$station %>% sort){
-  data_timeseries <- data_hourly_comb %>% 
-    filter(taxon %in% taxa_selected,
-           station %in% s)
-  
+for (s in stations$station %>% sort()) {
+  data_timeseries <- data_hourly_comb %>%
+    filter(
+      taxon %in% taxa_selected,
+      station %in% s
+    )
+
   large_diffs <- data_timeseries %>%
-    pivot_wider(names_from = type) %>% 
-    mutate(diff = Hirst - Cosmo,
-           mean_pol = (Hirst + Cosmo) / 2,
-           large_diff = if_else(Hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2), date, as.Date(NA))) %>% 
-    pull(large_diff) %>% 
+    pivot_wider(names_from = type) %>%
+    mutate(
+      diff = Hirst - Cosmo,
+      mean_pol = (Hirst + Cosmo) / 2,
+      large_diff = if_else(Hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2),
+        date,
+        as.Date(NA)
+      )
+    ) %>%
+    pull(large_diff) %>%
     unique()
-  
-  gg_timeseries[[s]] <- data_timeseries %>% 
+
+  gg_timeseries[[s]] <- data_timeseries %>%
     ggplot(aes(x = datetime, y = value, col = taxon, lty = type)) +
-      geom_line(alpha = 0.6) +
-      geom_vline(xintercept = large_diffs, alpha = 0.1, col = swatch()[1], size = 1) +
-      ggtitle(paste("Hourly", paste(taxa_selected, collapse = ", "), "Pollen Concentrations in", s)) +
-    labs(y = expression(paste("Pollen Concentration [", m^-3, "]")),
-         x = "2020 Season") +
+    geom_line(alpha = 0.6) +
+    geom_vline(
+      xintercept = large_diffs,
+      alpha = 0.1,
+      col = swatch()[1], size = 1
+    ) +
+    ggtitle(paste(
+      "Hourly", paste(taxa_selected, collapse = ", "),
+      "Pollen Concentrations in",
+      s
+    )) +
+    labs(
+      y = expression(paste("Pollen Concentration [", m^-3, "]")),
+      x = "2020 Season"
+    ) +
     scale_colour_discrete("Species") +
     scale_linetype_discrete("Data")
 }
-
 gg_timeseries
-
-# data_daily_comb %>% filter(taxon == "Betula", type == "Hirst", station == "Luzern") # There is missing data in Luzern for Betula.
-
 ```
 
 
@@ -439,18 +478,19 @@ Generally the traps show a high level of correlation / association (well above 0
 
 methods <- c("pearson", "spearman", "kendall")
 
-data_corr <- data_daily_comb %>% 
-  filter(measurement == "concentration") %>% 
-  mutate(value = log10(value + 1)) %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
-  select(value, type, datetime, station, taxon) %>% 
+data_corr <- data_daily_comb %>%
+  filter(measurement == "concentration") %>%
+  # For the robust methods transformation doesn't matter
+  mutate(value = log10(value + 1)) %>%
+  select(value, type, datetime, station, taxon) %>%
   pivot_wider(names_from = type, values_from = value)
 
-data_corr_exp <- data_daily_comb %>% 
-  filter(measurement == "concentration") %>% 
-  select(value, type, datetime, station, taxon) %>% 
+data_corr_exp <- data_daily_comb %>%
+  filter(measurement == "concentration") %>%
+  select(value, type, datetime, station, taxon) %>%
   pivot_wider(names_from = type, values_from = value)
 
-corr_matrix <- map(methods, ~corr.test(
+corr_matrix <- map(methods, ~ corr.test(
   data_corr %>% select(-datetime, -station, -taxon),
   # use = "complete", # There should be only complete observations
   method = .x,
@@ -458,7 +498,7 @@ corr_matrix <- map(methods, ~corr.test(
   alpha = .05,
   ci = TRUE,
   minlength = 5
-  ))
+))
 
 ```
 
@@ -467,36 +507,72 @@ corr_matrix <- map(methods, ~corr.test(
 max_val <- max(data_corr_exp$Cosmo, na.rm = TRUE)
 
 ggthemr("fresh")
-ci <- map(corr_matrix, ~.x %>% 
-  pluck(10)) %>% 
-  bind_rows() %>% 
-  round(2) %>% 
-  mutate(method = methods,
-         metric = c("R-", "rho-", "tau-"),
-         ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
-         x = rep(max_val * 0.1, times = 3),
-         y = c(max_val, max_val * 0.95, max_val * 0.9))
+ci <- map(corr_matrix, ~ .x %>%
+  pluck(10)) %>%
+  bind_rows() %>%
+  round(2) %>%
+  mutate(
+    method = methods,
+    metric = c("R-", "rho-", "tau-"),
+    ci = tools::toTitleCase(paste0(
+      metric,
+      method,
+      ": ",
+      lower.adj,
+      " - ",
+      upper.adj
+    )),
+    x = rep(max_val * 0.1, times = 3),
+    y = c(max_val, max_val * 0.95, max_val * 0.9)
+  )
 
-gg_corr <- data_corr_exp %>% 
-  ggplot(aes(x = Hirst, y = Cosmo)) + 
+gg_corr <- data_corr_exp %>%
+  ggplot(aes(x = Hirst, y = Cosmo)) +
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +  # The smoother is dependent on the scale (i.e. log or not) and rather confusing than helping
+  # The smoother is dependent on the scale
+  geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(data = ci, aes(label = ci, x = x, y = y), parse = TRUE) +
-  scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]", limits = c(0, max_val)) +
-  scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", limits = c(0, max_val))
-  # coord_cartesian(ylim = c(10, 500), xlim = c(10, 500))  +
-  # scale_y_continuous(name = "Modelled Pollen Concentration [m⁻³]", trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000)) +
-  # scale_x_continuous(name = "Measured Pollen Concentration [m⁻³]",trans=scales::pseudo_log_trans(base = 10), breaks = c(10, 20, 50, 100, 200, 300, 500, 1000, 2000, 5000))
+  scale_x_continuous(
+    name = "Measured Pollen Concentration [m⁻³]",
+    limits = c(0, max_val)
+  ) +
+  scale_y_continuous(
+    name = "Modelled Pollen Concentration [m⁻³]",
+    limits = c(0, max_val)
+  )
 
-title <- tools::toTitleCase(paste0("Comparison of Daily average concentrations of measured and modelled pollen concentrations"))
+title <- tools::toTitleCase(paste0(
+  "Comparison of Daily average",
+  " concentrations of measured and modelled pollen concentrations"
+))
 
 gg_corr <- ggarrange(gg_corr) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between measured and modelled data; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure(
+    top = title,
+    bottom = text_grob(paste0("Pairwise correlation between measured and ",
+      "modelled data; grey line shows the Loess smother; the red line shows",
+      "a theroratical perfect correlation of 1. \n In the text box one can",
+      "see the 95% confidence intervals of the R-values (adjusted for multiple",
+      "comparison) as obtained by Pearson and two robust methods."),
+      color = swatch()[1],
+      face = "italic",
+      size = 10
+    )
+)
 
-# ggsave(filename = paste0(here::here(), "/vignettes/figures/corr_plot.png"), gg_corr, width = 12, height = 8)
+
 gg_corr
 
+```
+
+```{r eval = FALSE}
+ggsave(
+  filename = paste0(here::here(), "/vignettes/figures/corr_plot.png"),
+  gg_corr,
+  width = 12,
+  height = 8
+)
 ```
 
 Comparison Plots
@@ -506,17 +582,23 @@ Comparison Plots
 For the concentrations we are looking at some density plots and histograms to start with and then we look at the relative differences from the common mean of the three traps.
 
 ```{r}
-data_altman <- data_corr %>% 
-    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
-                          rowSums(.[4:5], na.rm = TRUE) / 2, 
-                          NA_real_),
-           diff = Hirst - Cosmo)
+data_altman <- data_corr %>%
+  mutate(
+    mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+      rowSums(.[4:5], na.rm = TRUE) / 2,
+      NA_real_
+    ),
+    diff = Hirst - Cosmo
+  )
 
-data_altman_exp <- data_corr_exp %>% 
-    mutate(mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
-                          rowSums(.[4:5], na.rm = TRUE) / 2, 
-                          NA_real_),
-           diff = Hirst - Cosmo)
+data_altman_exp <- data_corr_exp %>%
+  mutate(
+    mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+      rowSums(.[4:5], na.rm = TRUE) / 2,
+      NA_real_
+    ),
+    diff = Hirst - Cosmo
+  )
 ```
 
 This is how concentration classes are defined based on their allergenic potential.
@@ -525,117 +607,176 @@ This is how concentration classes are defined based on their allergenic potentia
 
 categs <- c("weak", "medium", "strong", "verystrong")
 
-data_conc <- data_altman_exp %>% 
-  filter(mean >= 1) %>% 
+data_conc <- data_altman_exp %>%
+  filter(mean >= 1) %>%
   mutate(conc = case_when(
-            taxon == "Alnus" & mean >= 1 & mean <= 10 ~ "weak",
-            taxon == "Alnus" & mean >= 11 & mean <= 69 ~ "medium",
-            taxon == "Alnus" & mean >= 70 & mean <= 249~ "strong",
-            taxon == "Alnus" & mean >= 250 ~ "verystrong",
-            taxon == "Betula" & mean >= 1 & mean <= 10 ~ "weak",
-            taxon == "Betula" & mean >= 11 & mean <= 69 ~ "medium",
-            taxon == "Betula" & mean >= 70 & mean <= 299 ~ "strong",
-            taxon == "Betula" & mean >= 300 ~ "verystrong",
-            taxon == "Poaceae" & mean >= 1 & mean <= 19 ~ "weak",
-            taxon == "Poaceae" & mean >= 20 & mean <= 49 ~ "medium",
-            taxon == "Poaceae" & mean >= 50 & mean <= 149~ "strong",
-            taxon == "Poaceae" & mean >= 150 ~ "verystrong",
-            taxon == "Ambrosia" & mean >= 1 & mean <= 5 ~ "weak",
-            taxon == "Ambrosia" & mean >= 6 & mean <= 10 ~ "medium",
-            taxon == "Ambrosia" & mean >= 11 & mean <= 39 ~ "strong",
-            taxon == "Ambrosia" & mean >= 40 ~ "verystrong"
-  )) %>% 
-  pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>% 
+    taxon == "Alnus" & mean >= 1 & mean <= 10 ~ "weak",
+    taxon == "Alnus" & mean >= 11 & mean <= 69 ~ "medium",
+    taxon == "Alnus" & mean >= 70 & mean <= 249 ~ "strong",
+    taxon == "Alnus" & mean >= 250 ~ "verystrong",
+    taxon == "Betula" & mean >= 1 & mean <= 10 ~ "weak",
+    taxon == "Betula" & mean >= 11 & mean <= 69 ~ "medium",
+    taxon == "Betula" & mean >= 70 & mean <= 299 ~ "strong",
+    taxon == "Betula" & mean >= 300 ~ "verystrong",
+    taxon == "Poaceae" & mean >= 1 & mean <= 19 ~ "weak",
+    taxon == "Poaceae" & mean >= 20 & mean <= 49 ~ "medium",
+    taxon == "Poaceae" & mean >= 50 & mean <= 149 ~ "strong",
+    taxon == "Poaceae" & mean >= 150 ~ "verystrong",
+    taxon == "Ambrosia" & mean >= 1 & mean <= 5 ~ "weak",
+    taxon == "Ambrosia" & mean >= 6 & mean <= 10 ~ "medium",
+    taxon == "Ambrosia" & mean >= 11 & mean <= 39 ~ "strong",
+    taxon == "Ambrosia" & mean >= 40 ~ "verystrong"
+  )) %>%
+  pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>%
   pivot_wider(names_from = conc, values_from = value)
 
 gg_conc_dens <- list()
 gg_conc_hist <- list()
 
 labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
-# labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012) # For 2-hours
+# For 2-hours labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012)
 labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
 names(labels_y) <- categs
 names(labels_y_hist) <- categs
 
-for (j in categs){
-  if (j %in% names(data_conc)){
-     obs <- data_conc %>% 
-    filter(!is.na(!!sym(j))) %>% 
-    summarise(n()/2) %>% 
-    pull 
-  obs <- paste("# of Observations:", obs)
-  
-  gg_conc_dens[[j]] <- data_conc %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
-    coord_cartesian(xlim = c(0, NA)) 
+for (j in categs) {
+  if (j %in% names(data_conc)) {
+    obs <- data_conc %>%
+      filter(!is.na(!!sym(j))) %>%
+      summarise(n() / 2) %>%
+      pull()
+    obs <- paste("# of Observations:", obs)
+
+    gg_conc_dens[[j]] <- data_conc %>%
+      filter(!is.na(!!sym(j))) %>%
+      ggplot() +
+      # The area under that whole curve should be 1.
+      # To get an estimate of the probability of certain values,
+      # you'd have to integrate over an interval on your 'y' axis,
+      # and that value should never be greater than 1.
+      geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) +
+      geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
+      coord_cartesian(xlim = c(0, NA))
   }
 }
 
-gg_dens_conc <- ggarrange(plotlist = gg_conc_dens) %>% 
-  annotate_figure(top = paste("Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups."),
-                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. \n It is basically a smoothed histogram. The buckets are defined based on the mean.", color = swatch()[1], face = "italic", size = 10))
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens) %>%
+  annotate_figure(
+    top = paste(
+      "Comparison of Measurements of the Three",
+      "Traps for all Species and Different Concentration Groups."
+    ),
+    bottom = text_grob(paste0("We are looking at Density Kernel Estimators",
+      "for all three traps to compare the measurements between them.",
+      "\n The area under each curve adds up to 1 and makes it possible",
+      "to vizualise the (dis-)similarities of measurements from the",
+      " three traps. \n It is basically a smoothed histogram.",
+      " The buckets are definedbased on the mean."),
+      color = swatch()[1],
+      face = "italic",
+      size = 10
+    )
+  )
 
 gg_dens_conc
 
-# ggsave(filename = paste0(here::here(), "/vignettes/figures/density_plot.png"), gg_dens_conc, width = 12, height = 8)
+```
 
-
+```{r }
+ggsave(
+  filename = paste0(here::here(), "/vignettes/figures/density_plot.png"),
+  gg_dens_conc,
+  width = 12,
+  height = 8
+)
 ```
 
 ```{r}
 
-data_conc_plot <- data_conc %>% 
-  pivot_longer(categs[categs %in% names(data_conc)], names_to = "group", values_to = "value") %>% 
-  mutate(group = factor(group, levels = categs[categs %in% names(data_conc)]),
-         reldiff = diff / mean) %>% 
+data_conc_plot <- data_conc %>%
+  pivot_longer(categs[categs %in% names(data_conc)],
+    names_to = "group",
+    values_to = "value"
+  ) %>%
+  mutate(
+    group = factor(group, levels = categs[categs %in% names(data_conc)]),
+    reldiff = diff / mean
+  ) %>%
   filter(!is.na(value))
 
-means <- data_conc_plot %>% 
-  group_by(group, type) %>% 
+means <- data_conc_plot %>%
+  group_by(group, type) %>%
   summarise(mean = mean(reldiff))
 
-gg_boxplot_reldiff <- data_conc_plot %>% 
+gg_boxplot_reldiff <- data_conc_plot %>%
   ggplot(aes(x = group, y = reldiff)) +
   geom_boxplot(alpha = 0.6) +
-  geom_point(data = means, aes(x = group, y = mean), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
-  labs(x = "", y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)", title = paste("Relative Pairwise Differences for Daily Average Pollen-Concentrations")) +
-  facet_wrap(~ taxon)
+  geom_point(
+    data = means, aes(x = group, y = mean),
+    position = position_dodge(width = 0.75),
+    shape = 95,
+    size = 10,
+    show.legend = FALSE
+  ) +
+  labs(
+    x = "",
+    y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)",
+    title = paste("Relative Pairwise Differences for",
+    "Daily Average Pollen-Concentrations")
+  ) +
+  facet_wrap(~taxon)
 
 gg_boxplot_reldiff
 
-# ggsave(filename = paste0(here::here(), "/vignettes/figures/diff_boxplot.png"), gg_boxplot_reldiff, width = 12, height = 8)
+```
 
-
+```{r }
+ggsave(
+  filename = paste0(here::here(), "/vignettes/figures/diff_boxplot.png"),
+  gg_boxplot_reldiff,
+  width = 12,
+  height = 8
+)
 ```
 
 ```{r eval = FALSE}
 diff_selection <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
 taxon_avail <- diff_selection[diff_selection %in% unique(data_conc_plot$taxon)]
 
-kable_diff <- map(diff_selection,
-    ~data_conc_plot %>% 
+kable_diff <- map(
+  diff_selection,
+  ~ data_conc_plot %>%
     filter(taxon %in% .x) %>%
-    group_by(group, type) %>% 
-    summarise(q25 = quantile(reldiff, probs = 0.25, na.rm = TRUE),
-              median = median(reldiff, na.rm = TRUE),
-              q75 = quantile(reldiff, probs = 0.75, na.rm = TRUE)) %>% 
-    ungroup %>% 
-    group_by(group) %>% 
-    summarise_at(vars(q25, median, q75), ~mean(.)) %>% 
-    ungroup) %>% 
-  bind_rows
+    group_by(group, type) %>%
+    summarise(
+      q25 = quantile(reldiff, probs = 0.25, na.rm = TRUE),
+      median = median(reldiff, na.rm = TRUE),
+      q75 = quantile(reldiff, probs = 0.75, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    group_by(group) %>%
+    summarise_at(vars(q25, median, q75), ~ mean(.)) %>%
+    ungroup()
+) %>%
+  bind_rows()
 
-kable_diff %>% 
-  mutate(taxon = rep(taxon_avail, each = nrow(kable_diff) / length(taxon_avail)),
-         taxon = cell_spec(taxon, angle = 270, align = "center")) %>% 
-  mutate_at(vars(q25, median, q75), ~scales::percent(signif(., 3), accuracy = 0.01)) %>% 
-  select(taxon, everything()) %>% 
-  setNames(c("Species", "Class", "25%-Quantile", "Median", "75%-Quantile")) %>% 
-  kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>% 
-  kable_styling("striped", full_width = FALSE) %>% 
+kable_diff %>%
+  mutate(
+    taxon = rep(taxon_avail,
+      each = nrow(kable_diff) / length(taxon_avail)
+    ),
+    taxon = cell_spec(taxon, angle = 270, align = "center")
+  ) %>%
+  mutate_at(
+    vars(q25, median, q75),
+    ~ scales::percent(signif(., 3),
+      accuracy = 0.01
+    )
+  ) %>%
+  select(taxon, everything()) %>%
+  setNames(c("Species", "Class", "25%-Quantile", "Median", "75%-Quantile")) %>%
+  kable(escape = FALSE, align = c("c", "c", "r", "r", "r")) %>%
+  kable_styling("striped", full_width = FALSE) %>%
   collapse_rows(columns = 1)
 
 ```
@@ -646,30 +787,73 @@ The well established AB-method for clinical trials can be used here as well to c
 
 ```{r}
 
-sd_diff <- data_altman %>% 
-  summarise(sd_diff = sd(diff, na.rm = TRUE)) %>% 
+sd_diff <- data_altman %>%
+  summarise(sd_diff = sd(diff, na.rm = TRUE)) %>%
   pull(sd_diff)
 
-gg_ab1 <- data_altman %>% 
-  filter(!is.na(diff)) %>% 
+gg_ab1 <- data_altman %>%
+  filter(!is.na(diff)) %>%
   ggplot(aes(x = mean, y = diff)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(min(data_altman$mean), max(data_altman$mean)), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
+  coord_cartesian(
+    xlim = c(
+      min(data_altman$mean),
+      max(data_altman$mean)
+    ),
+    ylim = c(
+      -sd_diff[1] * 4,
+      sd_diff[1] * 4
+    )
+  ) +
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(
+    slope = 0,
+    intercept = sd_diff[1] * 2,
+    col = swatch()[4],
+    alpha = 0.8,
+    linetype = 3
+  ) +
+  geom_abline(
+    slope = 0,
+    intercept = sd_diff[1] * (-2),
+    col = swatch()[4],
+    alpha = 0.8,
+    linetype = 3
+  ) +
   geom_smooth(alpha = 0.1) +
   labs(y = "Difference(Hirst - Cosmo)", x = "Mean(Hirst, Cosmo)") +
   facet_wrap(~taxon)
 
-title <- "Altman-Bland Plot to Compare Measured and Modelled Pollen Concentrations"
+title <- paste0(
+  "Altman-Bland Plot to Compare",
+  "Measured and Modelled Pollen Concentrations"
+)
 
 gg_altman <- ggarrange(gg_ab1) %>%
-  annotate_figure(top = title, bottom = text_grob("Pairwise comparison of traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+  annotate_figure(top = title, bottom = text_grob(paste0(
+    "Pairwise comparison of traps; grey line shows the Loess smother;",
+    " the red line shows a theroratical perfect agreement between two ",
+    "traps of zero. \n The dashed red line shows the 2 * sd of the ",
+    "differences, where we expect the points to lie within."
+  ),
+  color = swatch()[1],
+  face = "italic",
+  size = 12
+  ))
 
 gg_altman
-# ggsave(filename = paste0(here::here(), "/vignettes/figures/altman-bland.png"), gg_altman, width = 12, height = 8)  
+```
 
+```{r }
+ggsave(
+  filename = paste0(
+    here::here(),
+    "/vignettes/figures/altman-bland.png"
+  ),
+  gg_altman,
+  width = 12,
+  height = 8
+)
 ```
 
 # Model Validation
@@ -678,8 +862,8 @@ gg_altman
 http://www.sthda.com/english/articles/38-regression-model-validation/158-regression-model-accuracy-metrics-r-square-aic-bic-cp-and-more/
 
 ```{r}
-data_conc_plot %>% 
-  pivot_wider(names_from = type, values_from = value) %>% 
+data_conc_plot %>%
+  pivot_wider(names_from = type, values_from = value) %>%
   summarise(
     R2 = cor(Hirst, Cosmo, use = "complete.obs")^2,
     MSE = mean((Hirst - Cosmo)^2, na.rm = TRUE),
@@ -697,47 +881,53 @@ https://towardsdatascience.com/the-5-classification-evaluation-metrics-you-must-
 
 https://towardsdatascience.com/multi-class-metrics-made-simple-part-i-precision-and-recall-9250280bddc2
 ```{r}
-data_valid <- data_altman_exp %>% 
-  mutate(conc_hirst = case_when(
-            taxon == "Alnus" & Hirst >= 1 & Hirst <= 10 ~ "weak",
-            taxon == "Alnus" & Hirst >= 11 & Hirst <= 69 ~ "medium",
-            taxon == "Alnus" & Hirst >= 70 & Hirst <= 249~ "strong",
-            taxon == "Alnus" & Hirst >= 250 ~ "verystrong",
-            taxon == "Betula" & Hirst >= 1 & Hirst <= 10 ~ "weak",
-            taxon == "Betula" & Hirst >= 11 & Hirst <= 69 ~ "medium",
-            taxon == "Betula" & Hirst >= 70 & Hirst <= 299 ~ "strong",
-            taxon == "Betula" & Hirst >= 300 ~ "verystrong",
-            taxon == "Poaceae" & Hirst >= 1 & Hirst <= 19 ~ "weak",
-            taxon == "Poaceae" & Hirst >= 20 & Hirst <= 49 ~ "medium",
-            taxon == "Poaceae" & Hirst >= 50 & Hirst <= 149~ "strong",
-            taxon == "Poaceae" & Hirst >= 150 ~ "verystrong",
-            taxon == "Ambrosia" & Hirst >= 1 & Hirst <= 5 ~ "weak",
-            taxon == "Ambrosia" & Hirst >= 6 & Hirst <= 10 ~ "medium",
-            taxon == "Ambrosia" & Hirst >= 11 & Hirst <= 39 ~ "strong",
-            taxon == "Ambrosia" & Hirst >= 40 ~ "verystrong"
-          ),
-         conc_cosmo = case_when(
-            taxon == "Alnus" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
-            taxon == "Alnus" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
-            taxon == "Alnus" & Cosmo >= 70 & Cosmo <= 249~ "strong",
-            taxon == "Alnus" & Cosmo >= 250 ~ "verystrong",
-            taxon == "Betula" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
-            taxon == "Betula" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
-            taxon == "Betula" & Cosmo >= 70 & Cosmo <= 299 ~ "strong",
-            taxon == "Betula" & Cosmo >= 300 ~ "verystrong",
-            taxon == "Poaceae" & Cosmo >= 1 & Cosmo <= 19 ~ "weak",
-            taxon == "Poaceae" & Cosmo >= 20 & Cosmo <= 49 ~ "medium",
-            taxon == "Poaceae" & Cosmo >= 50 & Cosmo <= 149~ "strong",
-            taxon == "Poaceae" & Cosmo >= 150 ~ "verystrong",
-            taxon == "Ambrosia" & Cosmo >= 1 & Cosmo <= 5 ~ "weak",
-            taxon == "Ambrosia" & Cosmo >= 6 & Cosmo <= 10 ~ "medium",
-            taxon == "Ambrosia" & Cosmo >= 11 & Cosmo <= 39 ~ "strong",
-            taxon == "Ambrosia" & Cosmo >= 40 ~ "verystrong"
-         )
-  ) %>% 
-  filter(!is.na(conc_hirst),
-         !is.na(conc_cosmo)) %>% 
-  mutate_at(vars(conc_hirst, conc_cosmo), ~factor(., levels = c("weak", "medium", "strong", "verystrong")))
-  
+data_valid <- data_altman_exp %>%
+  mutate(
+    conc_hirst = case_when(
+      taxon == "Alnus" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+      taxon == "Alnus" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+      taxon == "Alnus" & Hirst >= 70 & Hirst <= 249 ~ "strong",
+      taxon == "Alnus" & Hirst >= 250 ~ "verystrong",
+      taxon == "Betula" & Hirst >= 1 & Hirst <= 10 ~ "weak",
+      taxon == "Betula" & Hirst >= 11 & Hirst <= 69 ~ "medium",
+      taxon == "Betula" & Hirst >= 70 & Hirst <= 299 ~ "strong",
+      taxon == "Betula" & Hirst >= 300 ~ "verystrong",
+      taxon == "Poaceae" & Hirst >= 1 & Hirst <= 19 ~ "weak",
+      taxon == "Poaceae" & Hirst >= 20 & Hirst <= 49 ~ "medium",
+      taxon == "Poaceae" & Hirst >= 50 & Hirst <= 149 ~ "strong",
+      taxon == "Poaceae" & Hirst >= 150 ~ "verystrong",
+      taxon == "Ambrosia" & Hirst >= 1 & Hirst <= 5 ~ "weak",
+      taxon == "Ambrosia" & Hirst >= 6 & Hirst <= 10 ~ "medium",
+      taxon == "Ambrosia" & Hirst >= 11 & Hirst <= 39 ~ "strong",
+      taxon == "Ambrosia" & Hirst >= 40 ~ "verystrong"
+    ),
+    conc_cosmo = case_when(
+      taxon == "Alnus" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+      taxon == "Alnus" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+      taxon == "Alnus" & Cosmo >= 70 & Cosmo <= 249 ~ "strong",
+      taxon == "Alnus" & Cosmo >= 250 ~ "verystrong",
+      taxon == "Betula" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
+      taxon == "Betula" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
+      taxon == "Betula" & Cosmo >= 70 & Cosmo <= 299 ~ "strong",
+      taxon == "Betula" & Cosmo >= 300 ~ "verystrong",
+      taxon == "Poaceae" & Cosmo >= 1 & Cosmo <= 19 ~ "weak",
+      taxon == "Poaceae" & Cosmo >= 20 & Cosmo <= 49 ~ "medium",
+      taxon == "Poaceae" & Cosmo >= 50 & Cosmo <= 149 ~ "strong",
+      taxon == "Poaceae" & Cosmo >= 150 ~ "verystrong",
+      taxon == "Ambrosia" & Cosmo >= 1 & Cosmo <= 5 ~ "weak",
+      taxon == "Ambrosia" & Cosmo >= 6 & Cosmo <= 10 ~ "medium",
+      taxon == "Ambrosia" & Cosmo >= 11 & Cosmo <= 39 ~ "strong",
+      taxon == "Ambrosia" & Cosmo >= 40 ~ "verystrong"
+    )
+  ) %>%
+  filter(
+    !is.na(conc_hirst),
+    !is.na(conc_cosmo)
+  ) %>%
+  mutate_at(
+    vars(conc_hirst, conc_cosmo),
+    ~ factor(., levels = c("weak", "medium", "strong", "verystrong"))
+  )
+
 confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
 ```
