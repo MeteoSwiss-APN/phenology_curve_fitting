@@ -244,8 +244,8 @@ data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
     type = "Cosmo"
   ) %>%
   filter(between(
-    datetime, as_datetime("2017-03-02 00:01:00"),
-    as_datetime("2020-08-19 00:00:00")
+    datetime, as_datetime("2020-03-01 00:01:00"),
+    as_datetime("2020-03-30 00:00:00")
   )) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
 
@@ -361,9 +361,10 @@ data_hourly_comb <- data_hourly_imp %>%
 
 ```{r}
 plot_comb(
+  data_plot = data_hourly_comb,
   taxon = "Alnus",
   station = stations$station,
-  resolution = "Daily",
+  resolution = "Hourly",
   combined = TRUE,
   rm_zeros = FALSE
 )
@@ -448,7 +449,7 @@ for (s in stations$station %>% sort()) {
       y = expression(paste("Pollen Concentration [", m^-3, "]")),
       x = "2020 Season"
     ) +
-    scale_colour_discrete("Species") +
+    scale_colour_manual("Species", values = swatch()[c(2:5)]) +
     scale_linetype_discrete("Data")
 }
 gg_timeseries
@@ -656,6 +657,7 @@ for (j in categs) {
       # and that value should never be greater than 1.
       geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) +
       geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
+      scale_colour_manual("Species", values = swatch()[c(2, 4)]) +
       coord_cartesian(xlim = c(0, NA))
   }
 }
@@ -760,13 +762,15 @@ kable_diff <- map(
 ) %>%
   bind_rows()
 
+taxon <- data_conc_plot %>%
+  group_by(group) %>%
+  summarise(taxon = unique(taxon)) %>%
+  select(taxon) %>%
+  arrange(taxon) %>%
+  ungroup
+
 kable_diff %>%
-  mutate(
-    taxon = rep(taxon_avail,
-      each = nrow(kable_diff) / length(taxon_avail)
-    ),
-    taxon = cell_spec(taxon, angle = 270, align = "center")
-  ) %>%
+  bind_cols(taxon) %>%
   mutate_at(
     vars(q25, median, q75),
     ~ scales::percent(signif(., 3),
