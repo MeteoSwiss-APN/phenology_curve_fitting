@@ -5,7 +5,7 @@ date: "September 30, 2020"
 output: html_document
 ---
 
-```{r}
+```{r cosmopath}
 # DEFINE YOUR COSMO-OUTPUT FOLDER HERE
 
 cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
@@ -62,7 +62,7 @@ conflict_prefer(name = "rescale", winner = "scales")
 
 This vignette can be used "operationally" in the pollen model verification pipeline. The intent is to compare one or multiple timeseries of pollen concentrations predicted by different COMOS-devbuild with the measurements from the DWH. Based on various studies about the reliability of Hirst trap measurements daily averages are used. (Well to start with we use hourly, as we don't model full days).
 
-```{r}
+```{r dwhaggs}
 load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 ```
 
@@ -72,7 +72,7 @@ load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
 The data is obtained from the DWH for the current pollen season (2020). 
 The Model Data from COSMO-ART is available on tsa (CSCS) in /store.
 
-```{r }
+```{r species_definition}
 
 # The following types are being measured:
 # Erle - Alder - Aulne - Alnus
@@ -218,7 +218,7 @@ stations <-
 
 ```
 
-```{r}
+```{r read_cosmo}
 data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
   # setting na during import failed for some reason
   mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
@@ -251,7 +251,7 @@ data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
 
 ```
 
-```{r}
+```{r agg_cosmo}
 data_daily_cosmo <- data_cosmo %>%
   group_by(taxon, station, date, type, measurement) %>%
   # Values are not averaged per hour but simply retrieved at every hour
@@ -275,7 +275,7 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 
 ## Padding
 
-```{r}
+```{r padding}
 data_hourly_imp <- data$data_hourly %>%
   filter(between(
     datetime,
@@ -359,7 +359,7 @@ data_hourly_comb <- data_hourly_imp %>%
 ```
 
 
-```{r}
+```{r timeseries}
 plot_comb(
   data_plot = data_hourly_comb,
   taxon = "Alnus",
@@ -371,7 +371,7 @@ plot_comb(
 ```
 
 
-```{r }
+```{r table_overview}
 
 occurence <- data_daily_comb %>%
   group_by(taxon, station, type) %>%
@@ -404,15 +404,15 @@ create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
 ```
 
 
-```{r fig.height=6, fig.width=9}
-
+```{r indiv_timeseries, fig.height=6, fig.width=9}
+stations$station
 # Check stations tibble for all available locations
-stations_selected <- "Zürich"
+stations_selected <- "Lugano"
 # Check species tibble for all available pollen taxa
 taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
 gg_timeseries <- list()
 
-for (s in stations$station %>% sort()) {
+for (s in stations_selected %>% sort()) {
   data_timeseries <- data_hourly_comb %>%
     filter(
       taxon %in% taxa_selected,
@@ -475,7 +475,7 @@ A good summary of the methods and their shortcomings can be found here: https://
 
 Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the two sets of data.
 
-```{r}
+```{r correlation}
 
 methods <- c("pearson", "spearman", "kendall")
 
@@ -503,7 +503,7 @@ corr_matrix <- map(methods, ~ corr.test(
 
 ```
 
-```{r }
+```{r corrplot}
 
 max_val <- max(data_corr_exp$Cosmo, na.rm = TRUE)
 
@@ -567,7 +567,7 @@ gg_corr
 
 ```
 
-```{r eval = FALSE}
+```{r saveplot, eval = FALSE}
 ggsave(
   filename = paste0(here::here(), "/vignettes/figures/corr_plot.png"),
   gg_corr,
@@ -582,7 +582,7 @@ Comparison Plots
 
 For the concentrations we are looking at some density plots and histograms to start with and then we look at the relative differences from the common mean of the three traps.
 
-```{r}
+```{r dataprep}
 data_altman <- data_corr %>%
   mutate(
     mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
@@ -604,7 +604,7 @@ data_altman_exp <- data_corr_exp %>%
 
 This is how concentration classes are defined based on their allergenic potential.
 
-```{r }
+```{r densityplot}
 
 categs <- c("weak", "medium", "strong", "verystrong")
 
@@ -684,7 +684,7 @@ gg_dens_conc
 
 ```
 
-```{r }
+```{r savedens}
 ggsave(
   filename = paste0(here::here(), "/vignettes/figures/density_plot.png"),
   gg_dens_conc,
@@ -693,7 +693,7 @@ ggsave(
 )
 ```
 
-```{r}
+```{r boxplot}
 
 data_conc_plot <- data_conc %>%
   pivot_longer(categs[categs %in% names(data_conc)],
@@ -732,7 +732,7 @@ gg_boxplot_reldiff
 
 ```
 
-```{r }
+```{r savebox}
 ggsave(
   filename = paste0(here::here(), "/vignettes/figures/diff_boxplot.png"),
   gg_boxplot_reldiff,
@@ -741,7 +741,7 @@ ggsave(
 )
 ```
 
-```{r eval = FALSE}
+```{r tablediff, eval = FALSE}
 diff_selection <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
 taxon_avail <- diff_selection[diff_selection %in% unique(data_conc_plot$taxon)]
 
@@ -789,7 +789,7 @@ kable_diff %>%
 
 The well established AB-method for clinical trials can be used here as well to compare the means and differences between the two data sets. Again we see that XXX generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence XXX can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-```{r}
+```{r altman}
 
 sd_diff <- data_altman %>%
   summarise(sd_diff = sd(diff, na.rm = TRUE)) %>%
@@ -848,7 +848,7 @@ gg_altman <- ggarrange(gg_ab1) %>%
 gg_altman
 ```
 
-```{r }
+```{r savealtman}
 ggsave(
   filename = paste0(
     here::here(),
@@ -865,7 +865,7 @@ ggsave(
 
 http://www.sthda.com/english/articles/38-regression-model-validation/158-regression-model-accuracy-metrics-r-square-aic-bic-cp-and-more/
 
-```{r}
+```{r plotconc}
 data_conc_plot %>%
   pivot_wider(names_from = type, values_from = value) %>%
   summarise(
@@ -884,7 +884,7 @@ http://www.sthda.com/english/articles/36-classification-methods-essentials/143-e
 https://towardsdatascience.com/the-5-classification-evaluation-metrics-you-must-know-aa97784ff226
 
 https://towardsdatascience.com/multi-class-metrics-made-simple-part-i-precision-and-recall-9250280bddc2
-```{r}
+```{r confmatrix}
 data_valid <- data_altman_exp %>%
   mutate(
     conc_hirst = case_when(
