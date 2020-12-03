@@ -245,7 +245,7 @@ data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
   ) %>%
   filter(between(
     datetime, as_datetime("2020-03-01 00:01:00"),
-    as_datetime("2020-03-30 00:00:00")
+    as_datetime("2020-04-15 00:00:00")
   )) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
 
