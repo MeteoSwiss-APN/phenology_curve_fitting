@@ -79,9 +79,11 @@ conflict_prefer(name = "rescale", winner = "scales")
 # DEFINE YOUR COSMO-OUTPUT FOLDER HERE
 
 # Cosmo-1e Baselines
-cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
+cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
+
 # Measured Aggregates from the DWH for the Alnus season 2020.
-load(paste0(here::here(), "/data/pollen_dwh.RData"))
+load(paste0(here::here(), "/data/pollen_dwh_hourly.RData"))
+load(paste0(here::here(), "/data/pollen_dwh_daily.RData"))
 
 ```
 
@@ -232,7 +234,7 @@ stations <-
 ```
 
 ```{r read_cosmo}
-data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
+data_cosmo_hourly <- read_table2(cosmo_path, col_names = TRUE) %>%
   # setting na during import failed for some reason
   mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
   pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%
@@ -256,16 +258,12 @@ data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
     hour = hour(datetime),
     type = "Cosmo"
   ) %>%
-  filter(between(
-    datetime, as_datetime("2020-01-01 00:01:00"),
-    as_datetime("2020-04-15 00:00:00")
-  )) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
 
 ```
 
 ```{r agg_cosmo}
-data_daily_cosmo <- data_cosmo %>%
+data_daily_cosmo <- data_cosmo_hourly %>%
   group_by(taxon, station, date, type, measurement) %>%
   # Values are not averaged per hour but simply retrieved at every hour
   summarise(value = mean(value, na.rm = TRUE)) %>%
@@ -283,13 +281,12 @@ data_daily_cosmo <- data_cosmo %>%
 # Missing Data and Imputation
 
 There are no NAs in the original data. But there are some timestamps where no data was retrieved.
-We will work with daily average concentrations below and hence have averaged values per hour and then per day.
 Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
 
 ## Padding
 
 ```{r padding}
-data_hourly_imp <- data$data_hourly %>%
+data_hourly_imp <- data_dwh_hourly %>%
   filter(between(
     datetime,
     min(data_cosmo$datetime),
@@ -310,7 +307,7 @@ data_hourly_imp <- data$data_hourly %>%
     value = if_else(is.na(value), 0, value)
   )
 
-data_daily_imp <- data$data_daily %>%
+data_daily_imp <- data_dwh_daily %>%
   filter(between(datetime, min(data_cosmo$date), max(data_cosmo$date))) %>%
   pad(
     start_val = min(data_cosmo$date),
@@ -327,7 +324,7 @@ data_daily_imp <- data$data_daily %>%
     value = if_else(is.na(value), 0, value)
   )
 
-data_hourly_cosmo_imp <- data_cosmo %>%
+data_hourly_cosmo_imp <- data_cosmo_hourly %>%
   filter(
     between(datetime, min(data_cosmo$datetime), max(data_cosmo$datetime)),
     measurement == "concentration"
@@ -371,6 +368,8 @@ data_hourly_comb <- data_hourly_imp %>%
 
 ```
 
+In the folllowing we look at the three timeseries combined. 
+The temporal extent is defined by the cosmo version with assimilation module.
 
 ```{r timeseries}
 plot_comb(
@@ -473,7 +472,8 @@ gg_timeseries
 
 The correlation between the measurements and modeled data can be calculated easily.
 As we are only comparing two sets of data, mutliple testing is not a problem here.
-
+Note that we are not comparing all three timeseries here, as we want to create a new model that is as close to the measurements as possible.
+As it is still interesting how the old model without assimilation performs, we'll do that comparison with the measurements first.
 Careful the correlation coefficients method have some serious shortcomings:
 
 The correlation coefficient measures linear agreement--whether the measurements go up-and-down together. Certainly, we want the measures to go up-and-down together, but the correlation coefficient itself is deficient in at least three ways as a measure of agreement. (http://www.jerrydallal.com/LHSP/compare.htm)
@@ -589,7 +589,7 @@ ggsave(
 )
 ```
 
-Comparison Plots
+# Comparison Plots
 
 ## Concentration Categories Diff-Plots
 
@@ -616,6 +616,7 @@ data_altman_exp <- data_corr_exp %>%
 ```
 
 This is how concentration classes are defined based on their allergenic potential.
+As retrieved from confluence XXXX .
 
 ```{r densityplot}
 
@@ -645,13 +646,11 @@ data_conc <- data_altman_exp %>%
   pivot_wider(names_from = conc, values_from = value)
 
 gg_conc_dens <- list()
-gg_conc_hist <- list()
 
-labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y <- list(0.1, 0.015, 0.004, 0.002)
 # For 2-hours labels_y <- list(0.75, 0.03, 0.015, 0.010, 0.005, 0.0012)
 labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
 names(labels_y) <- categs
-names(labels_y_hist) <- categs
 
 for (j in categs) {
   if (j %in% names(data_conc)) {
@@ -670,8 +669,10 @@ for (j in categs) {
       # and that value should never be greater than 1.
       geom_density(aes(x = !!sym(j), col = type, fill = type), alpha = 0.15) +
       geom_label(label = obs, aes(x = max(!!sym(j)) * 0.7), y = labels_y[[j]]) +
-      scale_colour_manual("Species", values = swatch()[c(2, 4)]) +
-      coord_cartesian(xlim = c(0, NA))
+      scale_colour_manual("", values = swatch()[c(2, 4)]) +
+      scale_fill_manual(values = swatch()[c(2, 4)]) +
+      coord_cartesian(xlim = c(0, NA)) +
+      guides(fill = FALSE)
   }
 }
 
@@ -735,7 +736,7 @@ gg_boxplot_reldiff <- data_conc_plot %>%
   ) +
   labs(
     x = "",
-    y = "abs(Hirst - Cosmo) / mean(Hirst, Cosmo)",
+    y = "(Hirst - Cosmo) / mean(Hirst, Cosmo)",
     title = paste("Relative Pairwise Differences for",
     "Daily Average Pollen-Concentrations")
   ) +
