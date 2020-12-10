@@ -43,7 +43,7 @@ plot_comb <- function(data_plot,
     ungroup() %>%
     ggplot() +
     geom_line(aes(x = datetime, y = value, col = type, alpha = alpha_plot)) +
-    scale_color_manual(values = swatch()[c(2, 4)]) +
+    scale_color_manual(values = swatch()[c(2:4)]) +
     theme(legend.position = "none") +
     labs(y = "Mean Conc. [Pollen/m³]", x = "")
 
@@ -55,7 +55,7 @@ plot_comb <- function(data_plot,
       axis.ticks.x = element_blank(),
       axis.text.x = element_blank()
     ) +
-    scale_fill_manual(values = swatch()[c(2, 4)]) +
+    scale_fill_manual(values = swatch()[c(2:4)]) +
     labs(y = "Log Mean Conc. [Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
@@ -69,7 +69,7 @@ plot_comb <- function(data_plot,
     ) +
     facet_wrap(vars(type), ncol = 1) +
     theme(legend.position = "bottom") +
-    scale_fill_manual(values = swatch()[c(2, 4)]) +
+    scale_fill_manual(values = swatch()[c(2:4)]) +
     coord_flip() +
     labs(
       x = "Occurence of Pollen Concentrations",
@@ -115,4 +115,120 @@ create_kable <- function(data, title = "") {
       "Poaceae" = 2
     )) %>%
     add_header_above(myheader, font_size = 18)
+}
+
+#' Retrieve Pollendata from txt-file (COSMO output with Fieldextra)
+#'
+#' @param datapath File path to the txt-file containing the data
+#' @param type Hirst, Cosmo or Assim
+
+import_data <- function(datapath, type) {
+  read_table2(paste(datapath), col_names = TRUE) %>%
+    # setting na during import failed for some reason
+    mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
+    pivot_longer(CHBASE:CHZUER,
+      names_to = "station_tag",
+      values_to = "value"
+    ) %>%
+    mutate(
+      measurement = case_when(
+        str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
+        str_detect(PARAMETER, pattern = "fe") ~ "emission",
+        TRUE ~ "concentration"
+      ),
+      PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")
+    ) %>%
+    inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
+    inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
+    mutate(
+      datetime = ymd_h(paste0(
+        YYYY, sprintf("%02d", MM),
+        sprintf("%02d", DD),
+        sprintf("%02d", hh)
+      )),
+      date = lubridate::date(datetime),
+      hour = lubridate::hour(datetime),
+      type = type
+    ) %>%
+    select(taxon, station, date, hour, value, datetime, type, measurement)
+}
+
+#' Aggregate Hourly Data into Daily
+#'
+#' @param data Data Frame containing hourly concentrations
+
+aggregate_pollen <- function(data) {
+  data %>%
+    group_by(taxon, station, date, type, measurement) %>%
+    # Values are not averaged per hour but simply retrieved at every hour
+    summarise(value = mean(value, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(
+      hour = 0,
+      # date = date + days(1), # Depends on the definition
+      datetime = ymd_hm(paste0(
+        as.character(date),
+        paste0(sprintf("%02d", hour), ":00")
+      ))
+    )
+}
+
+#' Impute Hourly Data
+#'
+#' @param data Data Frame containing hourly concentrations
+
+impute_hourly <- function(data) {
+  data %>%
+    filter(
+      between(
+        datetime,
+        min(data_assim_hourly$datetime),
+        max(data_assim_hourly$datetime)
+      ),
+      taxon == unique(data_assim_hourly$taxon)
+    ) %>%
+    pad(
+      start_val = min(data_assim_hourly$datetime),
+      end_val = max(data_assim_hourly$datetime),
+      group = c("station", "taxon"),
+      by = "datetime",
+      break_above = 2
+    ) %>%
+    mutate(
+      date = lubridate::date(datetime),
+      hour = lubridate::hour(datetime),
+      type = unique(data$type),
+      measurement = "concentration",
+      value = if_else(is.na(value), 0, value)
+    )
+}
+
+#' Impute Daily Data
+#'
+#' @param data Data Frame containing daily concentrations
+
+impute_daily <- function(data) {
+  data %>%
+    filter(
+      between(
+        datetime,
+        min(data_assim_hourly$datetime),
+        max(data_assim_hourly$datetime)
+      ),
+      taxon == unique(data_assim_hourly$taxon)
+    ) %>%
+    pad(
+      start_val = min(data_assim_hourly$datetime),
+      end_val = max(data_assim_hourly$datetime),
+      group = c("station", "taxon"),
+      by = "datetime",
+      break_above = 2
+    ) %>%
+    mutate(
+      date = lubridate::date(datetime),
+      hour = lubridate::hour(datetime),
+      type = unique(data$type),
+      measurement = "concentration",
+      value = if_else(is.na(value), 0, value)
+    )
 }

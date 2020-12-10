@@ -76,14 +76,14 @@ conflict_prefer(name = "rescale", winner = "scales")
 # Data Import
 
 ```{r cosmopath, echo = FALSE}
-# DEFINE YOUR COSMO-OUTPUT FOLDER HERE
+# Cosmo-1e with Assimilation of Real-Time Pollen Data
+assim_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_assimilated.txt"
 
 # Cosmo-1e Baselines
 cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
 
 # Measured Aggregates from the DWH for the Alnus season 2020.
-load(paste0(here::here(), "/data/pollen_dwh_hourly.RData"))
-load(paste0(here::here(), "/data/pollen_dwh_daily.RData"))
+load(paste0(here::here(), "/data/data_dwh_hourly.RData"))
 
 ```
 
@@ -234,48 +234,14 @@ stations <-
 ```
 
 ```{r read_cosmo}
-data_cosmo_hourly <- read_table2(cosmo_path, col_names = TRUE) %>%
-  # setting na during import failed for some reason
-  mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
-  pivot_longer(CHBASE:CHZUER, names_to = "station_tag", values_to = "value") %>%
-  mutate(
-    measurement = case_when(
-      str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
-      str_detect(PARAMETER, pattern = "fe") ~ "emission",
-      TRUE ~ "concentration"
-    ),
-    PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")
-  ) %>%
-  inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
-  inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
-  mutate(
-    datetime = ymd_h(paste0(
-      YYYY, sprintf("%02d", MM),
-      sprintf("%02d", DD),
-      sprintf("%02d", hh)
-    )),
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Cosmo"
-  ) %>%
-  select(taxon, station, date, hour, value, datetime, type, measurement)
-
+data_cosmo_hourly <- import_data(cosmo_path, type = "Cosmo")
+data_assim_hourly <- import_data(assim_path, type = "Assim")
 ```
 
 ```{r agg_cosmo}
-data_daily_cosmo <- data_cosmo_hourly %>%
-  group_by(taxon, station, date, type, measurement) %>%
-  # Values are not averaged per hour but simply retrieved at every hour
-  summarise(value = mean(value, na.rm = TRUE)) %>%
-  ungroup() %>%
-  mutate(
-    hour = 0,
-    # date = date + days(1), # Depends on the definition
-    datetime = ymd_hm(paste0(
-      as.character(date),
-      paste0(sprintf("%02d", hour), ":00")
-    ))
-  )
+data_cosmo_daily <- aggregate_pollen(data_cosmo_hourly)
+data_assim_daily <- aggregate_pollen(data_assim_hourly)
+data_dwh_daily <- aggregate_pollen(data_dwh_hourly)
 ```
 
 # Missing Data and Imputation
@@ -286,85 +252,20 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 ## Padding
 
 ```{r padding}
-data_hourly_imp <- data_dwh_hourly %>%
-  filter(between(
-    datetime,
-    min(data_cosmo$datetime),
-    max(data_cosmo$datetime)
-  )) %>%
-  pad(
-    start_val = min(data_cosmo$datetime),
-    end_val = max(data_cosmo$datetime),
-    group = c("station", "taxon"),
-    by = "datetime",
-    break_above = 2
-  ) %>%
-  mutate(
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Hirst",
-    measurement = "concentration",
-    value = if_else(is.na(value), 0, value)
-  )
+data_dwh_hourly_imp <- impute_hourly(data_dwh_hourly)
+data_dwh_daily_imp <- impute_daily(data_dwh_daily)
+data_cosmo_hourly_imp <- impute_hourly(data_cosmo_hourly)
+data_cosmo_daily_imp <- impute_daily(data_cosmo_daily)
+data_assim_hourly_imp <- impute_hourly(data_assim_hourly)
+data_assim_daily_imp <- impute_daily(data_assim_daily)
 
-data_daily_imp <- data_dwh_daily %>%
-  filter(between(datetime, min(data_cosmo$date), max(data_cosmo$date))) %>%
-  pad(
-    start_val = min(data_cosmo$date),
-    end_val = max(data_cosmo$date),
-    group = c("station", "taxon"),
-    by = "datetime",
-    break_above = 2
-  ) %>%
-  mutate(
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Hirst",
-    measurement = "concentration",
-    value = if_else(is.na(value), 0, value)
-  )
+data_daily_comb <- data_dwh_daily_imp %>%
+  bind_rows(data_cosmo_daily_imp) %>%
+  bind_rows(data_assim_hourly_imp)
 
-data_hourly_cosmo_imp <- data_cosmo_hourly %>%
-  filter(
-    between(datetime, min(data_cosmo$datetime), max(data_cosmo$datetime)),
-    measurement == "concentration"
-  ) %>%
-  pad(
-    start_val = min(data_cosmo$datetime),
-    end_val = max(data_cosmo$datetime),
-    group = c("station", "taxon"),
-    by = "datetime",
-    break_above = 2
-  ) %>%
-  mutate(
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Cosmo",
-    measurement = "concentration",
-    value = if_else(is.na(value), 0, value)
-  )
-
-data_daily_cosmo_imp <- data_daily_cosmo %>%
-  filter(measurement == "concentration") %>%
-  pad(
-    start_val = min(data_cosmo$date),
-    end_val = max(data_cosmo$date),
-    group = c("station", "taxon", "measurement"),
-    by = "datetime",
-    break_above = 2
-  ) %>%
-  mutate(
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Cosmo",
-    value = if_else(is.na(value), 0, value)
-  )
-
-data_daily_comb <- data_daily_imp %>%
-  bind_rows(data_daily_cosmo_imp)
-
-data_hourly_comb <- data_hourly_imp %>%
-  bind_rows(data_hourly_cosmo_imp)
+data_hourly_comb <- data_dwh_hourly_imp %>%
+  bind_rows(data_cosmo_hourly_imp) %>%
+  bind_rows(data_assim_hourly_imp)
 
 ```
 
@@ -468,7 +369,9 @@ gg_timeseries
 ```
 
 
-# Correlation
+# Evaluation of the New Model
+
+## Pearson, Spearman and Kendall Correlation
 
 The correlation between the measurements and modeled data can be calculated easily.
 As we are only comparing two sets of data, mutliple testing is not a problem here.
@@ -481,8 +384,6 @@ The correlation coefficient measures linear agreement--whether the measurements 
 - The correlation coefficient can be close to 1 (or equal to 1!) even when there is considerable bias between the two methods. For example, if one method gives measurements that are always 10 units higher than the other method, the correlation will be 1 exactly, but the measurements will always be 10 units apart.
 - The magnitude of the correlation coefficient is affected by the range of subjects/units studied. The correlation coefficient can be made smaller by measuring samples that are similar to each other and larger by measuring samples that are very different from each other. The magnitude of the correlation says nothing about the magnitude of the differences between the paired measurements which, when you get right down to it, is all that really matters.
 - The usual significance test involving a correlation coefficient-- whether the population value is 0--is irrelevant to the comparability problem. What is important is not merely that the correlation coefficient be different from 0. Rather, it should be close to (ideally, equal to) 1! 
-
-## Pearson, Spearman and Kendall Correlation
 
 A good summary of the methods and their shortcomings can be found here: https://www.statisticssolutions.com/correlation-Pearson-Kendall-spear man/
 
@@ -588,8 +489,6 @@ ggsave(
   height = 8
 )
 ```
-
-# Comparison Plots
 
 ## Concentration Categories Diff-Plots
 
@@ -874,8 +773,7 @@ ggsave(
 )
 ```
 
-# Model Validation
-## Numerical
+## Numerical Metrics
 
 http://www.sthda.com/english/articles/38-regression-model-validation/158-regression-model-accuracy-metrics-r-square-aic-bic-cp-and-more/
 
@@ -891,7 +789,7 @@ data_conc_plot %>%
 
 ```
 
-## Categorical
+## Categorical Metrics
 
 http://www.sthda.com/english/articles/36-classification-methods-essentials/143-evaluation-of-classification-model-accuracy-essentials/
 
