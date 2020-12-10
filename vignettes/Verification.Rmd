@@ -5,12 +5,24 @@ date: "September 30, 2020"
 output: html_document
 ---
 
-```{r cosmopath}
-# DEFINE YOUR COSMO-OUTPUT FOLDER HERE
+This vignette allows for a streamlined comparison and verification of cosmo-ART modelled pollen output. It compares three different timeseries of daily pollen concentrations:
 
-cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
+- The measured concentrations from the DWH (stored in the data folder of the project)
+- The modelled concentrations from a baseline cosmo-1E 
+- The modelled from the new cosmo-1E-ART with 'assimilate_pollen' module
 
-```
+The goal for the new model is, to be closer to the observations than the baseline; the closer to the observations the better.
+Verification of pollen concentrations has historically been different due to various reasons:
+
+- A manyfold of biological processes that are parametrized by the temperature sum with unknown uncertainties.
+- A large dependency on the current status of the weather with binary effects (rain / no-rain)
+- Data becomes unreliable for shorter temporal averages than ~12h (true for Hirst Pollen Trap)
+- Very few observatory stations (14 in year 2020)
+- Defined severity classes, based on health impact
+
+Therefore, pollen concentrations are typically assessed with visual methods and expert knowledge.
+This vignette introduces some statistical procedures in addition to gain as much trust in the new model as possible.
+Knowing that pollen modeling has a large human component when it comes to verification and assessment of the result.
 
 
 ```{r setup, include=FALSE}
@@ -60,21 +72,22 @@ conflict_prefer(name = "rescale", winner = "scales")
 
 ```
 
-This vignette can be used "operationally" in the pollen model verification pipeline. The intent is to compare one or multiple timeseries of pollen concentrations predicted by different COMOS-devbuild with the measurements from the DWH. Based on various studies about the reliability of Hirst trap measurements daily averages are used. (Well to start with we use hourly, as we don't model full days).
-
-```{r dwhaggs}
-load(paste0(here::here(), "/vignettes/ext-data/data_aggs.RData"))
-```
 
 # Data Import
 
+```{r cosmopath, echo = FALSE}
+# DEFINE YOUR COSMO-OUTPUT FOLDER HERE
 
-The data is obtained from the DWH for the current pollen season (2020). 
-The Model Data from COSMO-ART is available on tsa (CSCS) in /store.
+# Cosmo-1e Baselines
+cosmo_path <- paste0(here::here(), "/vignettes/ext-data/mod_pollen_2020_ch.csv")
+# Measured Aggregates from the DWH for the Alnus season 2020.
+load(paste0(here::here(), "/data/pollen_dwh.RData"))
+
+```
+
 
 ```{r species_definition}
-
-# The following types are being measured:
+# The following types are being modelled:
 # Erle - Alder - Aulne - Alnus
 # Birke - Birch - Bouleau - Betula
 # Gräser - Grasses - Graminées - Poaceae
@@ -244,7 +257,7 @@ data_cosmo <- read_table2(cosmo_path, skip = 17, col_names = TRUE) %>%
     type = "Cosmo"
   ) %>%
   filter(between(
-    datetime, as_datetime("2020-03-01 00:01:00"),
+    datetime, as_datetime("2020-01-01 00:01:00"),
     as_datetime("2020-04-15 00:00:00")
   )) %>%
   select(taxon, station, date, hour, value, datetime, type, measurement)
@@ -407,9 +420,9 @@ create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
 ```{r indiv_timeseries, fig.height=6, fig.width=9}
 stations$station
 # Check stations tibble for all available locations
-stations_selected <- "Lugano"
+stations_selected <- stations$station
 # Check species tibble for all available pollen taxa
-taxa_selected <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
+taxa_selected <- c("Alnus")
 gg_timeseries <- list()
 
 for (s in stations_selected %>% sort()) {
@@ -433,7 +446,7 @@ for (s in stations_selected %>% sort()) {
     unique()
 
   gg_timeseries[[s]] <- data_timeseries %>%
-    ggplot(aes(x = datetime, y = value, col = taxon, lty = type)) +
+    ggplot(aes(x = datetime, y = value, col = type, lty = type)) +
     geom_line(alpha = 0.6) +
     geom_vline(
       xintercept = large_diffs,
@@ -449,7 +462,7 @@ for (s in stations_selected %>% sort()) {
       y = expression(paste("Pollen Concentration [", m^-3, "]")),
       x = "2020 Season"
     ) +
-    scale_colour_manual("Species", values = swatch()[c(2:5)]) +
+    scale_colour_manual("Species", values = swatch()[c(2, 4)]) +
     scale_linetype_discrete("Data")
 }
 gg_timeseries
