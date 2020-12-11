@@ -82,7 +82,7 @@ assim_path <- "/scratch/sadamov/wd/alnus_initial_2020/mod_pollen_combined.txt"
 # Cosmo-1e Baselines
 cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
 
-# Measured Aggregates from the DWH for the Alnus season 2020.
+# Measured Aggregates from the DWH for the 2020 season
 load(paste0(here::here(), "/data/data_dwh_hourly.RData"))
 
 ```
@@ -121,28 +121,28 @@ species_all <- tibble(
     "Ambrosia"
   ),
   hirst_taxon = c(
-    "kacastz0",
-    "kaalnuz0",
-    "kaulmuz0",
-    "kacuprz0",
-    "kafraxz0",
-    "kafaguz0",
-    "kajuglz0",
-    "khplanz0",
-    "kacoryz0",
-    "kapinuz0",
-    "kaquerz0",
-    "khrumez0",
-    "kaplatz0",
-    "kapopuz0",
-    "khpoacz0",
-    "kasaliz0",
-    "kabetuz0",
-    "kacarpz0",
-    "khurtiz0",
-    "kataxuz0",
-    "kapicez0",
-    "khambrz0"
+    "kacasth0",
+    "kaalnuh0",
+    "kaulmuh0",
+    "kacuprh0",
+    "kafraxh0",
+    "kafaguh0",
+    "kajuglh0",
+    "khplanh0",
+    "kacoryh0",
+    "kapinuh0",
+    "kaquerh0",
+    "khrumeh0",
+    "kaplath0",
+    "kapopuh0",
+    "khpoach0",
+    "kasalih0",
+    "kabetuh0",
+    "kacarph0",
+    "khurtih0",
+    "kataxuh0",
+    "kapiceh0",
+    "khambrh0"
   ),
   cosmo_taxon = c(
     NA_character_,
@@ -233,6 +233,35 @@ stations <-
 
 ```
 
+```{r read_dwh, eval = FALSE}
+# This is how the dwh data in /data was retrieved
+data_dwh_hourly <- dwhget_surface(
+  param_short = c("kaalnuh0", "khpoach0", "kabetuh0", "khambrh0"),
+  year = 2020,
+  iso_country_cd = "CH"
+) %>%
+  as_tibble() %>%
+  mutate(
+    datetime = ymd_hm(datetime),
+    date = date(datetime),
+    hour = hour(datetime),
+    type = "Hirst",
+    measurement = "concentration",
+    value = as.double(value)
+  ) %>%
+  inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
+  inner_join(stations, by = c("nat_abbr" = "hirst_station")) %>%
+  select(-param_short, -nat_abbr, -cosmo_taxon, -cosmo_station)
+
+save(data_dwh_hourly,
+  file = paste0(
+    here::here(),
+    "/data/data_dwh_hourly.RData"
+  )
+)
+
+```
+
 ```{r read_cosmo}
 data_cosmo_hourly <- import_data(cosmo_path, type = "Cosmo")
 data_assim_hourly <- import_data(assim_path, type = "Assim")
@@ -252,10 +281,8 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 ## Padding
 
 ```{r padding}
-data_dwh_hourly_imp <- impute_hourly(data_dwh_hourly) %>%
-  replace_na(list(value = 0))
-data_dwh_daily_imp <- impute_daily(data_dwh_daily) %>%
-  replace_na(list(value = 0))
+data_dwh_hourly_imp <- impute_hourly(data_dwh_hourly)
+data_dwh_daily_imp <- impute_daily(data_dwh_daily)
 data_cosmo_hourly_imp <- impute_hourly(data_cosmo_hourly)
 data_cosmo_daily_imp <- impute_daily(data_cosmo_daily)
 data_assim_hourly_imp <- impute_hourly(data_assim_hourly)
@@ -547,7 +574,7 @@ data_altman_exp <- data_corr_exp %>%
 ```
 
 This is how concentration classes are defined based on their allergenic potential.
-As retrieved from confluence XXXX .
+As retrieved from confluence https://confluence.meteoswiss.ch/display/APW/Aide+pollen.
 
 ```{r densityplot}
 
