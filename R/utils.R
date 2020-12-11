@@ -96,24 +96,15 @@ plot_comb <- function(data_plot,
 #' @return a kable object
 
 create_kable <- function(data, title = "") {
-  myheader <- c("dummy" = 9)
+  myheader <- c("dummy" = 4)
   names(myheader) <- paste(title)
-
-  data %>%
+  occurence %>%
     select(-metric) %>%
     mutate(value = round(value)) %>%
-    pivot_wider(names_from = taxon, values_from = value) %>%
-    pivot_wider(names_from = type, values_from = Alnus:Poaceae) %>%
-    setNames(c("Station", rep(c("Cosmo", "Hirst"), times = 4))) %>%
+    pivot_wider(names_from = type, values_from = value) %>%
+    select(-taxon) %>%
     kable() %>%
     kable_styling("striped", full_width = FALSE) %>%
-    add_header_above(c(
-      " " = 1,
-      "Alnus" = 2,
-      "Ambrosia" = 2,
-      "Betula" = 2,
-      "Poaceae" = 2
-    )) %>%
     add_header_above(myheader, font_size = 18)
 }
 

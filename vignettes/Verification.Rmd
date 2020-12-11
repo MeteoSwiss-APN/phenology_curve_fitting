@@ -77,7 +77,7 @@ conflict_prefer(name = "rescale", winner = "scales")
 
 ```{r cosmopath, echo = FALSE}
 # Cosmo-1e with Assimilation of Real-Time Pollen Data
-assim_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_assimilated.txt"
+assim_path <- "/scratch/sadamov/wd/alnus_initial_2020/mod_pollen_combined.txt"
 
 # Cosmo-1e Baselines
 cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
@@ -252,20 +252,24 @@ Generally, missing data usually occurs when the silicone rubber bands were being
 ## Padding
 
 ```{r padding}
-data_dwh_hourly_imp <- impute_hourly(data_dwh_hourly)
-data_dwh_daily_imp <- impute_daily(data_dwh_daily)
+data_dwh_hourly_imp <- impute_hourly(data_dwh_hourly) %>%
+  replace_na(list(value = 0))
+data_dwh_daily_imp <- impute_daily(data_dwh_daily) %>%
+  replace_na(list(value = 0))
 data_cosmo_hourly_imp <- impute_hourly(data_cosmo_hourly)
 data_cosmo_daily_imp <- impute_daily(data_cosmo_daily)
 data_assim_hourly_imp <- impute_hourly(data_assim_hourly)
 data_assim_daily_imp <- impute_daily(data_assim_daily)
 
-data_daily_comb <- data_dwh_daily_imp %>%
+data_comb_daily <- data_dwh_daily_imp %>%
   bind_rows(data_cosmo_daily_imp) %>%
   bind_rows(data_assim_hourly_imp)
 
-data_hourly_comb <- data_dwh_hourly_imp %>%
+data_comb_hourly <- data_dwh_hourly_imp %>%
   bind_rows(data_cosmo_hourly_imp) %>%
   bind_rows(data_assim_hourly_imp)
+
+taxa_selected <- unique(data_assim_hourly$taxon)
 
 ```
 
@@ -273,60 +277,87 @@ In the folllowing we look at the three timeseries combined.
 The temporal extent is defined by the cosmo version with assimilation module.
 
 ```{r timeseries}
-plot_comb(
-  data_plot = data_hourly_comb,
-  taxon = "Alnus",
-  station = stations$station,
+map(stations$station, ~ plot_comb(
+  data_plot = data_comb_hourly,
+  taxon = taxa_selected,
+  station = .x,
   resolution = "Hourly",
   combined = TRUE,
   rm_zeros = FALSE
-)
+))
 ```
 
 
 ```{r table_overview}
 
-occurence <- data_daily_comb %>%
+occurence <- data_comb_daily %>%
   group_by(taxon, station, type) %>%
   summarise(value = sum(value != 0)) %>%
   ungroup() %>%
   mutate(metric = "occurence")
 
-maximum <- data_daily_comb %>%
+maximum <- data_comb_daily %>%
   group_by(taxon, station, type) %>%
   summarise(value = max(value)) %>%
   ungroup() %>%
   mutate(metric = "maximum")
 
-average <- data_daily_comb %>% # This would need a season definition
+average <- data_comb_daily %>% # This would need a season definition
   group_by(taxon, station, type) %>%
   summarise(value = mean(value)) %>%
   ungroup() %>%
   mutate(metric = "average")
 
-spi <- data_daily_comb %>%
+spi <- data_comb_daily %>%
   group_by(taxon, station, type) %>%
   summarise(value = sum(value)) %>%
   ungroup() %>%
   mutate(metric = "spi")
 
-create_kable(occurence, title = "Occurence of Pollen [Days]")
-create_kable(maximum, title = "Maximum Pollen Concentration [m⁻³]")
-create_kable(average, title = "Average Pollen Concentration [m⁻³]")
-create_kable(spi, title = "Seasonal Pollen Integral [days*m⁻³]")
+create_kable(occurence,
+  title = paste0(
+    "Occurence of",
+    taxa_selected,
+    " Pollen [Days]"
+  )
+)
+create_kable(maximum,
+  title = paste0(
+    "Maximum ",
+    taxa_selected,
+    " Pollen Concentration [m⁻³]"
+  )
+)
+create_kable(average,
+  title = paste0(
+    "Average ",
+    taxa_selected,
+    " Pollen Concentration [m⁻³]"
+  )
+)
+create_kable(spi,
+  title = paste0(
+    "Seasonal ",
+    taxa_selected,
+    " Pollen Integral [days*m⁻³]"
+  )
+)
 ```
 
 
+From now on we only want to compare the new model to the measurements.
+```{r }
+data_verif <- data_comb_hourly %>%
+  filter(type != "Cosmo")
+```
+
 ```{r indiv_timeseries, fig.height=6, fig.width=9}
-stations$station
 # Check stations tibble for all available locations
-stations_selected <- stations$station
-# Check species tibble for all available pollen taxa
-taxa_selected <- c("Alnus")
+stations_selected <- "Zürich"
 gg_timeseries <- list()
 
 for (s in stations_selected %>% sort()) {
-  data_timeseries <- data_hourly_comb %>%
+  data_timeseries <- data_verif %>%
     filter(
       taxon %in% taxa_selected,
       station %in% s
@@ -335,8 +366,8 @@ for (s in stations_selected %>% sort()) {
   large_diffs <- data_timeseries %>%
     pivot_wider(names_from = type) %>%
     mutate(
-      diff = Hirst - Cosmo,
-      mean_pol = (Hirst + Cosmo) / 2,
+      diff = Hirst - Assim,
+      mean_pol = (Hirst + Assim) / 2,
       large_diff = if_else(Hirst > 20 & ((abs(diff) + mean_pol) / mean_pol > 2),
         date,
         as.Date(NA)
@@ -362,9 +393,10 @@ for (s in stations_selected %>% sort()) {
       y = expression(paste("Pollen Concentration [", m^-3, "]")),
       x = "2020 Season"
     ) +
-    scale_colour_manual("Species", values = swatch()[c(2, 4)]) +
-    scale_linetype_discrete("Data")
+    scale_colour_manual("Data", values = swatch()[c(2, 4)]) +
+    guides(lty = FALSE)
 }
+
 gg_timeseries
 ```
 
@@ -393,14 +425,14 @@ Generally the traps show a high level of correlation / association (well above 0
 
 methods <- c("pearson", "spearman", "kendall")
 
-data_corr <- data_daily_comb %>%
+data_corr <- data_verif %>%
   filter(measurement == "concentration") %>%
   # For the robust methods transformation doesn't matter
   mutate(value = log10(value + 1)) %>%
   select(value, type, datetime, station, taxon) %>%
   pivot_wider(names_from = type, values_from = value)
 
-data_corr_exp <- data_daily_comb %>%
+data_corr_exp <- data_verif %>%
   filter(measurement == "concentration") %>%
   select(value, type, datetime, station, taxon) %>%
   pivot_wider(names_from = type, values_from = value)
@@ -419,7 +451,7 @@ corr_matrix <- map(methods, ~ corr.test(
 
 ```{r corrplot}
 
-max_val <- max(data_corr_exp$Cosmo, na.rm = TRUE)
+max_val <- max(data_corr_exp$Assim, na.rm = TRUE)
 
 ggthemr("fresh")
 ci <- map(corr_matrix, ~ .x %>%
@@ -442,7 +474,7 @@ ci <- map(corr_matrix, ~ .x %>%
   )
 
 gg_corr <- data_corr_exp %>%
-  ggplot(aes(x = Hirst, y = Cosmo)) +
+  ggplot(aes(x = Hirst, y = Assim)) +
   geom_point(alpha = 0.3) +
   # The smoother is dependent on the scale
   geom_smooth(alpha = 0.1) +
@@ -497,20 +529,20 @@ For the concentrations we are looking at some density plots and histograms to st
 ```{r dataprep}
 data_altman <- data_corr %>%
   mutate(
-    mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+    mean = if_else(!is.na(Hirst) | !is.na(Assim),
       rowSums(.[4:5], na.rm = TRUE) / 2,
       NA_real_
     ),
-    diff = Hirst - Cosmo
+    diff = Hirst - Assim
   )
 
 data_altman_exp <- data_corr_exp %>%
   mutate(
-    mean = if_else(!is.na(Hirst) | !is.na(Cosmo),
+    mean = if_else(!is.na(Hirst) | !is.na(Assim),
       rowSums(.[4:5], na.rm = TRUE) / 2,
       NA_real_
     ),
-    diff = Hirst - Cosmo
+    diff = Hirst - Assim
   )
 ```
 
@@ -541,7 +573,7 @@ data_conc <- data_altman_exp %>%
     taxon == "Ambrosia" & mean >= 11 & mean <= 39 ~ "strong",
     taxon == "Ambrosia" & mean >= 40 ~ "verystrong"
   )) %>%
-  pivot_longer(Hirst:Cosmo, names_to = "type", values_to = "value") %>%
+  pivot_longer(Hirst:Assim, names_to = "type", values_to = "value") %>%
   pivot_wider(names_from = conc, values_from = value)
 
 gg_conc_dens <- list()
@@ -655,8 +687,7 @@ ggsave(
 ```
 
 ```{r tablediff, eval = FALSE}
-diff_selection <- c("Alnus", "Betula", "Poaceae", "Ambrosia")
-taxon_avail <- diff_selection[diff_selection %in% unique(data_conc_plot$taxon)]
+diff_selection <- taxa_selected
 
 kable_diff <- map(
   diff_selection,
@@ -781,10 +812,10 @@ http://www.sthda.com/english/articles/38-regression-model-validation/158-regress
 data_conc_plot %>%
   pivot_wider(names_from = type, values_from = value) %>%
   summarise(
-    R2 = cor(Hirst, Cosmo, use = "complete.obs")^2,
-    MSE = mean((Hirst - Cosmo)^2, na.rm = TRUE),
+    R2 = cor(Hirst, Assim, use = "complete.obs")^2,
+    MSE = mean((Hirst - Assim)^2, na.rm = TRUE),
     RMSE = sqrt(MSE),
-    MAE = mean(abs(Hirst - Cosmo), na.rm = TRUE)
+    MAE = mean(abs(Hirst - Assim), na.rm = TRUE)
   )
 
 ```
@@ -817,33 +848,33 @@ data_valid <- data_altman_exp %>%
       taxon == "Ambrosia" & Hirst >= 11 & Hirst <= 39 ~ "strong",
       taxon == "Ambrosia" & Hirst >= 40 ~ "verystrong"
     ),
-    conc_cosmo = case_when(
-      taxon == "Alnus" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
-      taxon == "Alnus" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
-      taxon == "Alnus" & Cosmo >= 70 & Cosmo <= 249 ~ "strong",
-      taxon == "Alnus" & Cosmo >= 250 ~ "verystrong",
-      taxon == "Betula" & Cosmo >= 1 & Cosmo <= 10 ~ "weak",
-      taxon == "Betula" & Cosmo >= 11 & Cosmo <= 69 ~ "medium",
-      taxon == "Betula" & Cosmo >= 70 & Cosmo <= 299 ~ "strong",
-      taxon == "Betula" & Cosmo >= 300 ~ "verystrong",
-      taxon == "Poaceae" & Cosmo >= 1 & Cosmo <= 19 ~ "weak",
-      taxon == "Poaceae" & Cosmo >= 20 & Cosmo <= 49 ~ "medium",
-      taxon == "Poaceae" & Cosmo >= 50 & Cosmo <= 149 ~ "strong",
-      taxon == "Poaceae" & Cosmo >= 150 ~ "verystrong",
-      taxon == "Ambrosia" & Cosmo >= 1 & Cosmo <= 5 ~ "weak",
-      taxon == "Ambrosia" & Cosmo >= 6 & Cosmo <= 10 ~ "medium",
-      taxon == "Ambrosia" & Cosmo >= 11 & Cosmo <= 39 ~ "strong",
-      taxon == "Ambrosia" & Cosmo >= 40 ~ "verystrong"
+    conc_assim = case_when(
+      taxon == "Alnus" & Assim >= 1 & Assim <= 10 ~ "weak",
+      taxon == "Alnus" & Assim >= 11 & Assim <= 69 ~ "medium",
+      taxon == "Alnus" & Assim >= 70 & Assim <= 249 ~ "strong",
+      taxon == "Alnus" & Assim >= 250 ~ "verystrong",
+      taxon == "Betula" & Assim >= 1 & Assim <= 10 ~ "weak",
+      taxon == "Betula" & Assim >= 11 & Assim <= 69 ~ "medium",
+      taxon == "Betula" & Assim >= 70 & Assim <= 299 ~ "strong",
+      taxon == "Betula" & Assim >= 300 ~ "verystrong",
+      taxon == "Poaceae" & Assim >= 1 & Assim <= 19 ~ "weak",
+      taxon == "Poaceae" & Assim >= 20 & Assim <= 49 ~ "medium",
+      taxon == "Poaceae" & Assim >= 50 & Assim <= 149 ~ "strong",
+      taxon == "Poaceae" & Assim >= 150 ~ "verystrong",
+      taxon == "Ambrosia" & Assim >= 1 & Assim <= 5 ~ "weak",
+      taxon == "Ambrosia" & Assim >= 6 & Assim <= 10 ~ "medium",
+      taxon == "Ambrosia" & Assim >= 11 & Assim <= 39 ~ "strong",
+      taxon == "Ambrosia" & Assim >= 40 ~ "verystrong"
     )
   ) %>%
   filter(
     !is.na(conc_hirst),
-    !is.na(conc_cosmo)
+    !is.na(conc_assim)
   ) %>%
   mutate_at(
-    vars(conc_hirst, conc_cosmo),
+    vars(conc_hirst, conc_assim),
     ~ factor(., levels = c("weak", "medium", "strong", "verystrong"))
   )
 
-confusionMatrix(data_valid$conc_cosmo, data_valid$conc_hirst)
+confusionMatrix(data_valid$conc_assim, data_valid$conc_hirst)
 ```
