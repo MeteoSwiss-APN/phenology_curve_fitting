@@ -14,12 +14,23 @@ source(file.path(
   ".vscode-R", "init.R"
 ))
 
-options(vsc.plot = "Two")
-options(vsc.dev.args = list(width = 800, height = 600))
-options(vsc.browser = "Two")
-options(vsc.viewer = "Two")
-options(vsc.page_viewer = "Two")
-options(vsc.view = "Two")
+
+if (interactive() && Sys.getenv("TERM_PROGRAM") == "vscode") {
+  if ("httpgd" %in% .packages(all.available = TRUE)) {
+    options(vsc.plot = FALSE)
+    options(device = function(...) {
+      httpgd::httpgd()
+      .vsc.browser(httpgd::httpgdURL(), viewer = "Beside")
+    })
+  } else {
+    options(vsc.plot = "Beside")
+    options(vsc.dev.args = list(width = 800, height = 600))
+    options(vsc.browser = "Beside")
+    options(vsc.viewer = "Beside")
+    options(vsc.page_viewer = "Beside")
+    options(vsc.view = "Beside")
+  }
+}
 
 options(error = function() {
   calls <- sys.calls()
