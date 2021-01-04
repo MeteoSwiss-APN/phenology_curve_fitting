@@ -623,6 +623,18 @@
       "Repository": "CRAN",
       "Hash": "0aaf56b7960bb066646e1868cadcaf07"
     },
+    "httpgd": {
+      "Package": "httpgd",
+      "Version": "1.0.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "nx10",
+      "RemoteRepo": "httpgd",
+      "RemoteRef": "master",
+      "RemoteSha": "2ca04f6e0d14cdd73d66eae96d7dfa7e34d3d83c",
+      "Hash": "693131e6f3e7c71f6f6c16aac07e481d"
+    },
     "httr": {
       "Package": "httr",
       "Version": "1.4.2",
