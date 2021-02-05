@@ -58,7 +58,7 @@ library(kableExtra)
 library(ggpubr)
 # These themes just look great :-)
 # Download from devtools::install_github('cttobin/ggthemr')
-library(ggthemr)
+library(ggthemr) 
 
 ggthemr("fresh")
 
@@ -77,7 +77,7 @@ conflict_prefer(name = "rescale", winner = "scales")
 
 ```{r cosmopath, echo = FALSE}
 # Cosmo-1e with Assimilation of Real-Time Pollen Data
-assim_path <- "/scratch/sadamov/wd/alnus_initial_2020/mod_pollen_combined.txt"
+assim_path <- "/scratch/sadamov/wd/v1/mod_pollen_combined.txt"
 
 # Cosmo-1e Baselines
 cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
@@ -239,7 +239,7 @@ data_dwh_hourly <- dwhget_surface(
   param_short = c("kaalnuh0", "khpoach0", "kabetuh0", "khambrh0"),
   year = 2020,
   iso_country_cd = "CH"
-) %>%
+) %>% 
   as_tibble() %>%
   mutate(
     datetime = ymd_hm(datetime),
@@ -275,8 +275,9 @@ data_dwh_daily <- aggregate_pollen(data_dwh_hourly)
 
 # Missing Data and Imputation
 
-There are no NAs in the original data. But there are some timestamps where no data was retrieved.
+There are some timestamps where no data was retrieved. (wolfgang and LCDF)
 Generally, missing data usually occurs when the silicone rubber bands were being exchanged.
+Should I apply the 1/1.35 factor? The optimal threshold will just be different, shoudn't matter too much.
 
 ## Padding
 
@@ -290,7 +291,7 @@ data_assim_daily_imp <- impute_daily(data_assim_daily)
 
 data_comb_daily <- data_dwh_daily_imp %>%
   bind_rows(data_cosmo_daily_imp) %>%
-  bind_rows(data_assim_hourly_imp)
+  bind_rows(data_assim_daily_imp)
 
 data_comb_hourly <- data_dwh_hourly_imp %>%
   bind_rows(data_cosmo_hourly_imp) %>%
@@ -305,13 +306,14 @@ The temporal extent is defined by the cosmo version with assimilation module.
 
 ```{r timeseries}
 map(stations$station, ~ plot_comb(
-  data_plot = data_comb_hourly,
+  data_plot = data_comb_daily,
   taxon = taxa_selected,
   station = .x,
   resolution = "Hourly",
   combined = TRUE,
   rm_zeros = FALSE
 ))
+
 ```
 
 
@@ -374,13 +376,13 @@ create_kable(spi,
 
 From now on we only want to compare the new model to the measurements.
 ```{r }
-data_verif <- data_comb_hourly %>%
+data_verif <- data_comb_daily %>%
   filter(type != "Cosmo")
 ```
 
 ```{r indiv_timeseries, fig.height=6, fig.width=9}
 # Check stations tibble for all available locations
-stations_selected <- "Zürich"
+stations_selected <- "Basel"
 gg_timeseries <- list()
 
 for (s in stations_selected %>% sort()) {
@@ -674,7 +676,7 @@ data_conc_plot <- data_conc %>%
   ) %>%
   mutate(
     group = factor(group, levels = categs[categs %in% names(data_conc)]),
-    reldiff = diff / mean
+    reldiff = diff / mean - 1
   ) %>%
   filter(!is.na(value))
 
@@ -844,7 +846,6 @@ data_conc_plot %>%
     RMSE = sqrt(MSE),
     MAE = mean(abs(Hirst - Assim), na.rm = TRUE)
   )
-
 ```
 
 ## Categorical Metrics

@@ -32,7 +32,12 @@ plot_comb <- function(data_plot,
     " average concentrations of ",
     taxon,
     " Pollen in ",
-    station
+    station,
+    " ",
+    stations %>% 
+      filter(station == !!station) %>%
+      pull(hirst_station)
+
   ))
 
   alpha_plot <- 0.5
@@ -98,7 +103,7 @@ plot_comb <- function(data_plot,
 create_kable <- function(data, title = "") {
   myheader <- c("dummy" = 4)
   names(myheader) <- paste(title)
-  occurence %>%
+  data %>%
     select(-metric) %>%
     mutate(value = round(value)) %>%
     pivot_wider(names_from = type, values_from = value) %>%
@@ -203,14 +208,14 @@ impute_daily <- function(data) {
     filter(
       between(
         datetime,
-        min(data_assim_hourly$datetime),
-        max(data_assim_hourly$datetime)
+        min(data_assim_daily$datetime),
+        max(data_assim_daily$datetime)
       ),
-      taxon == unique(data_assim_hourly$taxon)
+      taxon == unique(data_assim_daily$taxon)
     ) %>%
     pad(
-      start_val = min(data_assim_hourly$datetime),
-      end_val = max(data_assim_hourly$datetime),
+      start_val = min(data_assim_daily$datetime),
+      end_val = max(data_assim_daily$datetime),
       group = c("station", "taxon"),
       by = "datetime",
       break_above = 2
