@@ -42,10 +42,15 @@ knitr::opts_chunk$set(
 library(mchdwh) # renv will not find MCHRAN, please install manually
 if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
 library(dplyr)
+library(magrittr)
 library(readr)
 library(tidyr)
 library(purrr)
 library(stringr)
+library(here)
+library(sf)
+library(rgdal)
+library(raster)
 library(scales)
 library(psych)
 library(caret)
@@ -58,7 +63,9 @@ library(kableExtra)
 library(ggpubr)
 # These themes just look great :-)
 # Download from devtools::install_github('cttobin/ggthemr')
-library(ggthemr) 
+library(ggthemr)
+library(viridis)
+library(leaflet)
 
 ggthemr("fresh")
 
@@ -69,6 +76,7 @@ conflict_prefer(name = "select", winner = "dplyr")
 conflict_prefer(name = "filter", winner = "dplyr")
 conflict_prefer(name = "lag", winner = "dplyr")
 conflict_prefer(name = "rescale", winner = "scales")
+conflict_prefer(name = "here", winner = "here")
 
 ```
 
@@ -77,10 +85,10 @@ conflict_prefer(name = "rescale", winner = "scales")
 
 ```{r cosmopath, echo = FALSE}
 # Cosmo-1e with Assimilation of Real-Time Pollen Data
-assim_path <- "/scratch/sadamov/wd/v1/mod_pollen_combined.txt"
+assim_path <- "/scratch/sadamov/wd/threshold100/mod_pollen_combined.txt"
 
 # Cosmo-1e Baselines
-cosmo_path <- "/scratch/sadamov/wd/alnus_season_2020/mod_pollen_combined.txt"
+cosmo_path <- "/scratch/sadamov/wd/osm/mod_pollen_combined.txt"
 
 # Measured Aggregates from the DWH for the 2020 season
 load(paste0(here::here(), "/data/data_dwh_hourly.RData"))
@@ -229,7 +237,8 @@ stations <-
       # NA_character_,
       "CHLUGA"
     )
-  )
+  ) %>%
+  arrange(hirst_station)
 
 ```
 
@@ -301,6 +310,9 @@ taxa_selected <- unique(data_assim_hourly$taxon)
 
 ```
 
+# Plots
+## Timeseries Boxplot
+
 In the folllowing we look at the three timeseries combined. 
 The temporal extent is defined by the cosmo version with assimilation module.
 
@@ -316,6 +328,189 @@ map(stations$station, ~ plot_comb(
 
 ```
 
+
+## Swiss Municipalities
+
+https://timogrossenbacher.ch/2019/04/bivariate-maps-with-ggplot2-and-sf/ Timo has a great blog about plotting maps in CH. The following open source shapefiles and code chunks are directly from his git repo here: https://github.com/grssnbchr/bivariate-maps-ggplot2-sf
+Swisstopo has some great (free) map material for Switzerland which we will use here.
+
+```{r echo = TRUE}
+
+path_in <- paste0(here(), "/data/input/")
+# read cantonal borders
+canton_geo <- read_sf(paste0(path_in, "g2k15.shp"))
+# read country borders - masking with read_sf didn't work
+country_geo <- readOGR(paste0(path_in, "g2l15.shp"))
+# read lakes
+lake_geo <- read_sf(paste0(path_in, "g2s15.shp"))
+# read productive area (2324 municipalities)
+municipality_prod_geo <- read_sf(paste0(path_in, "gde-1-1-15.shp"))
+
+# read in raster of relief
+relief <- raster(paste0(path_in, "02-relief-ascii.asc")) %>%
+  # hide relief outside of Switzerland by masking with country borders
+  mask(country_geo) %>%
+  as("SpatialPixelsDataFrame") %>%
+  as.data.frame() %>%
+  rename(value = `X02.relief.ascii`)
+
+# clean up
+rm(country_geo)
+```
+
+The mod_pollen data in this case was retrieved using fieldextra (MCH-Software). Which allows to extract modeled concentrations at any coordinate in the model domain.
+The postprocessing of the fieldextra output is not yet streamlined. This could still be developed at some point.
+
+```{r }
+
+# Varnames from FieldExtra can be very long -> data.table
+data <- data.table::fread(paste0(path_in, "mod_pollen_c1e_osm.csv")) %>%
+  slice(1) %>%
+  pivot_longer(ch0001:ch6810, names_to = "bfs_id", values_to = "mean") %>%
+  select(bfs_id, mean) %>%
+  mutate(bfs_id = as.integer(str_replace_all(bfs_id, "ch", "")))
+
+municipality_prod_geo %<>%
+  left_join(data, by = c("BFS_ID" = "bfs_id"))
+
+# define number of classes
+no_classes <- 6
+
+# extract quantiles
+quantiles <- municipality_prod_geo %>%
+  pull(mean) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1)) %>%
+  as.vector() # to remove names of quantiles, so idx below is numeric
+
+# here we create custom labels
+labels <- imap_chr(quantiles, function(., idx) {
+  return(paste0(
+    round(quantiles[idx], 0),
+    " - ",
+    round(quantiles[idx + 1], 0),
+    " m^-3"
+  ))
+})
+
+# we need to remove the last label
+# because that would be something like "- NA"
+labels <- labels[seq_len(length(labels)) - 1]
+
+# here we actually create a new
+# variable on the dataset with the quantiles
+municipality_prod_geo %<>%
+  mutate(mean_quantiles = cut(mean,
+    breaks = quantiles,
+    labels = labels,
+    include.lowest = T
+  ))
+```
+
+```{r eval = FALSE}
+
+map_timo <- ggplot(
+  # define main data source
+  data = municipality_prod_geo
+) +
+  # first: draw the relief
+  geom_raster(
+    data = relief,
+    inherit.aes = FALSE,
+    aes(
+      x = x,
+      y = y,
+      alpha = value
+    )
+  ) +
+  # use the "alpha hack" (as the "fill" aesthetic is already taken)
+  scale_alpha(
+    name = "",
+    range = c(0.6, 0),
+    guide = F
+  ) + # suppress legend
+  # add main fill aesthetic
+  # use thin white stroke for municipality borders
+  geom_sf(
+    mapping = aes(
+      fill = mean_quantiles
+    ),
+    color = "white",
+    size = 0.1
+  ) +
+  # use the Viridis color scale
+  scale_fill_viridis(
+    option = "viridis",
+    name = "Alnus",
+    alpha = 0.8, # make fill a bit brighter
+    begin = 0.3, # this option seems to be new (compared to 2016):
+    # with this we can truncate the
+    # color scale, so that extreme colors (very dark and very bright) are not
+    # used, which makes the map a bit more aesthetic
+    end = 0.9,
+    discrete = T, # discrete classes, thus guide_legend instead of _colorbar
+    direction = 1, # dark is lowest, yellow is highest
+    guide = guide_legend(
+      keyheight = unit(5, units = "mm"),
+      title.position = "top",
+      reverse = T # display highest income on top
+    )
+  ) +
+  # use thicker white stroke for cantonal borders
+  geom_sf(
+    data = canton_geo,
+    fill = "transparent",
+    color = "#ffffff",
+    size = 0.5
+  ) +
+  # draw lakes in light blue
+  geom_sf(
+    data = lake_geo,
+    fill = "#acc42500",
+    color = "transparent"
+  ) +
+  # add titles
+  labs(
+    x = NULL,
+    y = NULL,
+    title = "Alnus Pollen in Switzerland",
+    subtitle = paste("Hourly Average Concentration on",
+       "the 1st of March 2020 at Noon")
+  ) +
+  # add theme
+  my_maptheme()
+map_timo
+# ggsave(paste0(here(), "/map_timo.png"), map_timo, dpi = "retina")
+```
+
+And an interactive map with municipality level data.
+
+```{r }
+pal <- colorNumeric("YlOrRd", layer_poly_leaflet$layer)
+mymap <- "https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png"
+
+leaflet_map_muni <- leaflet(municipality_prod_geo %>%
+  select(mean) %>%
+  st_transform(crs = "+proj=longlat +datum=WGS84")) %>%
+  # If the map is too heavy -> simplify shapes
+  # ms_simplify(keep = 0.05))  %>%
+  addTiles(urlTemplate = mymap) %>%
+  # Cosmo 1E Domain with extended boundaries
+  fitBounds(lat1 = 45, lat2 = 48, lng1 = 6, lng2 = 11) %>%
+  addPolygons(
+    weight = 0,
+    popup = paste("<br/>",
+      paste0("<b>", municipality_prod_geo$Secondary_, "</b><br/>"),
+      paste0(as.character(round(municipality_prod_geo$mean, 0)),
+        " Pollenkörner pro m³")
+    ),
+    smoothFactor = 0.5,
+    fillColor = ~ pal(mean),
+    fillOpacity = 0.6
+  ) %>%
+  addLegend(pal = pal, values = ~ municipality_prod_geo$mean, title = "Poaceae")
+
+leaflet_map_muni
+```
 
 ```{r table_overview}
 
