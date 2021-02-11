@@ -38,7 +38,6 @@ knitr::opts_chunk$set(
   out.height = "100%"
 )
 
-
 library(mchdwh) # renv will not find MCHRAN, please install manually
 if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
 library(dplyr)
@@ -49,6 +48,7 @@ library(purrr)
 library(stringr)
 library(here)
 library(sf)
+library(ncdf4)
 library(rgdal)
 library(raster)
 library(scales)
@@ -328,13 +328,42 @@ map(stations$station, ~ plot_comb(
 
 ```
 
+## Raster Grib Images
+
+There are multiple options to read in grib1/2 files directly. I prefer it this way to avoid using fxconvert or fieldextra.
+Unfortunately none of the approaches found on the web worked for our laf/lfff files. I will setup a cluster running python to try other libraries.
+https://stackoverflow.com/questions/37205691/reading-grib-data-in-r-reading-band-names
+https://www.quora.com/How-do-I-open-GRIB-files-in-R?share=1
+https://www.rdocumentation.org/packages/rNOMADS/versions/2.5.0/topics/ReadGrib
+
+
+```{r data, echo = TRUE}
+nc_path <- paste0("/scratch/sadamov/wd/threshold100/20030100_c1e_tsa_alnus_threshold100/lm_coarse/lfff00150000") # This can be any netCDF file with POAC (e.g.)
+
+system(paste0("fxfilter --force -s ALNUtthrs ", nc_path, " -o ", nc_path, "_filtered"))
+system(paste0("fxconvert --force nc ", nc_path, "_filtered -o ", nc_path, "_filtered.nc"))
+
+con <- nc_open(paste0(nc_path, "_filtered.nc"))
+layer <- ncvar_get(con, "ALNUtthrs")
+x <- ncvar_get(con, "lon_1")
+y <- ncvar_get(con, "lat_1")
+nc_close(con)
+
+r <- raster(layer,
+  ymn = min(y), ymx = max(y),
+  xmn = min(x), xmx = max(x)
+)
+pal <- colorRampPalette(c("#4da17a","#d32323"))
+plot(r, zlim = c(0, 8000), col = pal(30))
+```
+
 
 ## Swiss Municipalities
 
 https://timogrossenbacher.ch/2019/04/bivariate-maps-with-ggplot2-and-sf/ Timo has a great blog about plotting maps in CH. The following open source shapefiles and code chunks are directly from his git repo here: https://github.com/grssnbchr/bivariate-maps-ggplot2-sf
 Swisstopo has some great (free) map material for Switzerland which we will use here.
 
-```{r echo = TRUE}
+```{r timo_plot echo = TRUE}
 
 path_in <- paste0(here(), "/data/input/")
 # read cantonal borders
