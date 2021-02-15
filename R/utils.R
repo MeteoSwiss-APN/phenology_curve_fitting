@@ -14,7 +14,14 @@ plot_comb <- function(data_plot,
                       station,
                       resolution,
                       rm_zeros,
-                      combined) {
+                      combined,
+                      plot_dwh) {
+
+  if (!plot_dwh){
+    data_plot <- data_plot %>%
+      filter(type != "Hirst")
+  }
+
   data_plot <- data_plot %>%
     filter(
       taxon %in% !!taxon,

@@ -89,10 +89,10 @@ library(languageserver)
 
 ```{r cosmopath, echo = FALSE}
 # Cosmo-1e with Assimilation of Real-Time Pollen Data
-assim_path <- "/scratch/sadamov/wd/threshold100/mod_pollen_combined.txt"
+assim_path <- "/scratch/sadamov/wd/v1/mod_sdes_combined.txt"
 
 # Cosmo-1e Baselines
-cosmo_path <- "/scratch/sadamov/wd/osm/mod_pollen_combined.txt"
+cosmo_path <- "/scratch/sadamov/wd/osm/mod_sdes_combined.txt"
 
 # Measured Aggregates from the DWH for the 2020 season
 load(paste0(here::here(), "/data/data_dwh_hourly.RData"))
@@ -248,30 +248,30 @@ stations <-
 
 ```{r read_dwh, eval = FALSE}
 # This is how the dwh data in /data was retrieved. Only works on old R-3.5.2 with mchdwh library
-data_dwh_hourly <- dwhget_surface(
-  param_short = c("kaalnuh0", "khpoach0", "kabetuh0", "khambrh0"),
-  year = 2020,
-  iso_country_cd = "CH"
-) %>% 
-  as_tibble() %>%
-  mutate(
-    datetime = ymd_hm(datetime),
-    date = date(datetime),
-    hour = hour(datetime),
-    type = "Hirst",
-    measurement = "concentration",
-    value = as.double(value)
-  ) %>%
-  inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
-  inner_join(stations, by = c("nat_abbr" = "hirst_station")) %>%
-  select(-param_short, -nat_abbr, -cosmo_taxon, -cosmo_station)
+# data_dwh_hourly <- dwhget_surface(
+#   param_short = c("kaalnuh0", "khpoach0", "kabetuh0", "khambrh0"),
+#   year = 2020,
+#   iso_country_cd = "CH"
+# ) %>% 
+#   as_tibble() %>%
+#   mutate(
+#     datetime = ymd_hm(datetime),
+#     date = date(datetime),
+#     hour = hour(datetime),
+#     type = "Hirst",
+#     measurement = "concentration",
+#     value = as.double(value)
+#   ) %>%
+#   inner_join(species, by = c("param_short" = "hirst_taxon")) %>%
+#   inner_join(stations, by = c("nat_abbr" = "hirst_station")) %>%
+#   select(-param_short, -nat_abbr, -cosmo_taxon, -cosmo_station)
 
-save(data_dwh_hourly,
-  file = paste0(
-    here::here(),
-    "/data/data_dwh_hourly.RData"
-  )
-)
+# save(data_dwh_hourly,
+#   file = paste0(
+#     here::here(),
+#     "/data/data_dwh_hourly.RData"
+#   )
+# )
 
 ```
 
@@ -325,13 +325,14 @@ map(stations$station, ~ plot_comb(
   data_plot = data_comb_daily,
   taxon = taxa_selected,
   station = .x,
-  resolution = "Hourly",
+  resolution = "Daily",
   combined = TRUE,
-  rm_zeros = FALSE
+  rm_zeros = FALSE,
+  plot_dwh = FALSE
 ))
 
 ```
-
+ 
 ## Raster Grib Images
 
 There are multiple options to read in grib1/2 files directly. I prefer it this way to avoid using fxconvert or fieldextra.
@@ -340,135 +341,50 @@ https://stackoverflow.com/questions/37205691/reading-grib-data-in-r-reading-band
 https://www.quora.com/How-do-I-open-GRIB-files-in-R?share=1
 https://www.rdocumentation.org/packages/rNOMADS/versions/2.5.0/topics/ReadGrib
 
-```{r }
-########################################################################################################
-###
-###   Name: rotation.R
-###
-###   Purpose:
-###
-###     This converts rotated model (COSMO) coordinates into 'real' geographical coordinates (WGS84)
-###   INPUT:
-###
-###     lat       : Latitude in degree
-###     lon       : Longituede on degree
-###     derotate  : logical; if TRUE lat,lon is assumed to be on COSMO grid and rotation into WGS84 will be performed
-###                          if FALSE function assumes lat,lon in WGS84 and coordinates are rotated onto COSMO grid
-###
-###   OUTPUT:
-###
-###     Latitude and Longitude decimal degrees
-###
-###   Author: Sascha Bellaire & Reto Stauffer
-#########################################################################################################
-
-##################
-### Some global stuff
-#################
-
-# Set number of digits
-options(digits = 5)
-
-##################
-### Load libraries
-#################
-
-library(rgdal)
-library(raster)
-library(sp)
-
-
-#########################################################################################################
-### Start the function
-#########################################################################################################
-
-## Convert CH y/x to WGS lat
-rotation = function(lon,lat, derotate){
-
-  ##################
-  ### Some definitions
-  #################
-
-  # CRS COSMO
-  crs_cosmo = paste('+units=m +a=6367470 +o_proj=longlat +b=6367470',
-                    '+o_lat_p=43.0 +lon_0=10.0 +proj=ob_tran +o_lon_p=0.0')
-
-  # CRS WGS84
-#  crs_wgs84 = paste('+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0')
-  crs_wsg84 = paste("+proj=stere +lat_0=90 +lat_ts=90 +lon_0=10 +k=0.93301270189 +units=km +datum=WGS84")
-
-  ##################
-  ### Rotate the coordinates depending on direction
-  #################
-
-  # De-rotate from COSMO into WGS84
-  if(derotate == TRUE ){
-
-    sp_in  = SpatialPoints(as.data.frame(cbind(lon,lat)), proj4string=crs(crs_cosmo))
-    sp_out = project(coordinates(sp_in)*pi/180, crs_cosmo, inv=TRUE)
-
-  }else{ # from WGS84 into COSMO rotated grid
-
-    sp_in  = SpatialPoints(as.data.frame(cbind(lon,lat)), proj4string=crs(crs_wgs84))
-    sp_out = project(coordinates(sp_in), crs_cosmo, inv=FALSE) *180/pi
-
-  }
-
-  ##################
-  ### Return results and end function
-  #################
-
-  return(sp_out)
-
-
-} # end of function
-
-```
 
 ```{r data, echo = TRUE}
-nc_path <- paste0("/scratch/sadamov/wd/osm/20021000_c1e_tsa_alnus_osm/lm_coarse/lfff00150000") # This can be any netCDF file with POAC (e.g.)
-variable <- "ALNUtthrs"
+for (model_version in c("times10", "osm", "v1WrongGridBoxes")) {
+  i <- 1
+  date <- 20033100
+  nc_path <- paste0("/scratch/sadamov/wd/", model_version, "/", date, "_c1e_tsa_alnus_", model_version, "/lm_coarse/lfff00150000") # This can be any netCDF file with POAC (e.g.)
+  variable <- "ALNUfr"
 
-system(paste0("fxfilter --force -s ", variable, " ", nc_path, " -o ", nc_path, "_filtered"))
-system(paste0("fxconvert --force nc ", nc_path, "_filtered -o ", nc_path, "_filtered.nc"))
+  system(paste0("fxfilter --force -s ", variable, " ", nc_path, " -o ", nc_path, "_filtered"))
+  system(paste0("fxconvert --force nc ", nc_path, "_filtered -o ", nc_path, "_filtered.nc"))
 
-con <- nc_open(paste0(nc_path, "_filtered.nc"))
-layer <- ncvar_get(con, paste(variable))
-x <- ncvar_get(con, "lon_1")
-y <- ncvar_get(con, "lat_1")
-nc_close(con)
+  con <- nc_open(paste0(nc_path, "_filtered.nc"))
+  if (con$ndims == 5) {
+    layer <- ncvar_get(con, paste(variable))[, , 80]
+  } else {
+    layer <- ncvar_get(con, paste(variable))
+  }
+  x <- ncvar_get(con, "lon_1")
+  y <- ncvar_get(con, "lat_1")
+  nc_close(con)
 
-# layer_latlong <- tibble(
-#   x = c(x),
-#   y = c(y),
-#   layer = c(layer)
-# ) %>%
-#   # lons west of 0 deg. need to be negative, hence make them negative here
-#   mutate(x = if_else(x > 180, x - 360, x))
+  if (variable %in% c("ALNU", "ALNUress", "ALNUreso", "ALNUfe ")){
+    layer <- log10(layer + 1)
+  }
 
-# xy_rot <- rotation(c(x), c(y), TRUE)
+  if (i == 1){
+    limits <- c(min(layer), max(layer))
+  }
 
-# r <- raster(log10(layer),
-#   xmn = min(xy_rot[, 1]), xmx = max(xy_rot[, 1]),
-#   ymn = min(xy_rot[, 2]), ymx = max(xy_rot[, 2])
-# )
+  r <- raster(layer,
+    xmn = min(x), xmx = max(x),
+    ymn = min(y), ymx = max(y), 
+    crs = crs(paste('+units=m +a=6367470 +o_proj=longlat +b=6367470',
+                      '+o_lat_p=43.0 +lon_0=10.0 +proj=ob_tran +o_lon_p=0.0'))
+  )
 
-# polygon <- layer_latlong %>%
-#   st_as_sf(coords = c("x", "y"), crs = 4326) %>%
-#   summarise(geometry = st_combine(geometry)) %>%
-#   st_cast("POLYGON")  %>%
-#   rmapshaper::ms_simplify()
-#   plot(polygon)
-
-r <- raster(layer,
-  xmn = min(x), xmx = max(x),
-  ymn = min(y), ymx = max(y), 
-  crs = crs(paste('+units=m +a=6367470 +o_proj=longlat +b=6367470',
-                    '+o_lat_p=43.0 +lon_0=10.0 +proj=ob_tran +o_lon_p=0.0'))
-)
-
-pal <- colorRampPalette(c("#4da17a","#d32323"))
-plot(r, zlim = c(0, 8000), col = pal(30))
+  pal <- colorRampPalette(c("#4da17a", "#d32323"))
+  plot(
+    r,
+  zlim = limits,
+  col = pal(30),
+  main = paste(model_version, date, variable))
+  i = 0
+}
 
 ```
 
