@@ -39,7 +39,7 @@ knitr::opts_chunk$set(
 )
 
 # library(mchdwh) # renv will not find MCHRAN, please install manually install.packages("mchdwh", repos = c("http://mchran.meteoswiss.ch", "https://stat.ethz.ch/CRAN"))
-if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
+# if (Sys.info()["nodename"] != "tsa-ln002") library(ROracle)
 library(dplyr)
 library(magrittr)
 library(readr)
@@ -89,10 +89,10 @@ library(languageserver)
 
 ```{r cosmopath, echo = FALSE}
 # Cosmo-1e with Assimilation of Real-Time Pollen Data
-assim_path <- "/scratch/sadamov/wd/v1/mod_sdes_combined.txt"
+assim_path <- "/scratch/sadamov/wd/v2/mod_pollen_combined.txt"
 
 # Cosmo-1e Baselines
-cosmo_path <- "/scratch/sadamov/wd/osm/mod_sdes_combined.txt"
+cosmo_path <- "/scratch/sadamov/wd/osm/mod_pollen_combined.txt"
 
 # Measured Aggregates from the DWH for the 2020 season
 load(paste0(here::here(), "/data/data_dwh_hourly.RData"))
@@ -328,7 +328,7 @@ map(stations$station, ~ plot_comb(
   resolution = "Daily",
   combined = TRUE,
   rm_zeros = FALSE,
-  plot_dwh = FALSE
+  plot_dwh = TRUE
 ))
 
 ```
@@ -343,11 +343,11 @@ https://www.rdocumentation.org/packages/rNOMADS/versions/2.5.0/topics/ReadGrib
 
 
 ```{r data, echo = TRUE}
-for (model_version in c("times10", "osm", "v1WrongGridBoxes")) {
+for (model_version in c("v2", "osm")) {
   i <- 1
-  date <- 20033100
-  nc_path <- paste0("/scratch/sadamov/wd/", model_version, "/", date, "_c1e_tsa_alnus_", model_version, "/lm_coarse/lfff00150000") # This can be any netCDF file with POAC (e.g.)
-  variable <- "ALNUfr"
+  date <- 20013100
+  nc_path <- paste0("/scratch/sadamov/wd/", model_version, "/", date, "_c1e_tsa_", model_version, "/lm_coarse/lfff00150000") # This can be any netCDF file with POAC (e.g.)
+  variable <- "ALNU"
 
   system(paste0("fxfilter --force -s ", variable, " ", nc_path, " -o ", nc_path, "_filtered"))
   system(paste0("fxconvert --force nc ", nc_path, "_filtered -o ", nc_path, "_filtered.nc"))
