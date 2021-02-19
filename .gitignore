@@ -3,13 +3,7 @@
 .RData
 .Ruserdata
 AutoPollen.html
-cosmo
 vignettes/Concept.html
-%
-=
 vignettes/figures/
-vignettes/ext-data/
 vignettes/Verification.html
-data/*
-map_timo.png
 workspace.RData
