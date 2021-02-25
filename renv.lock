@@ -457,6 +457,13 @@
       "Repository": "CRAN",
       "Hash": "ec8ca05cffcc70569eaaad8469d2a3a7"
     },
+    "fBasics": {
+      "Package": "fBasics",
+      "Version": "3042.89.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "dc823946abdae63c6297a9db173f3acf"
+    },
     "fabletools": {
       "Package": "fabletools",
       "Version": "0.3.0",
@@ -615,6 +622,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "7d7f283939f563670a697165b2cf5560"
+    },
+    "gss": {
+      "Package": "gss",
+      "Version": "2.2-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "2a9885045dcfc0ff993d7f2a6b882e80"
     },
     "gtable": {
       "Package": "gtable",
@@ -860,6 +874,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "e87a35ec73b157552814869f45a63aa3"
+    },
+    "minpack.lm": {
+      "Package": "minpack.lm",
+      "Version": "1.2-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a9ba91cecfe19eb0558a494ebd4e1f1d"
     },
     "minqa": {
       "Package": "minqa",
@@ -1274,6 +1295,13 @@
       "Repository": "CRAN",
       "Hash": "9d6831c4c002137d99be6b946ac9da07"
     },
+    "sicegar": {
+      "Package": "sicegar",
+      "Version": "0.2.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "5f5344e5ce8a5feba60ee0e2459551c5"
+    },
     "slider": {
       "Package": "slider",
       "Version": "0.1.5",
@@ -1287,6 +1315,20 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "dfd843ee98246cf932823acf613b05dd"
+    },
+    "spatial": {
+      "Package": "spatial",
+      "Version": "7.3-13",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "8d0918547149f72e78ae942ccd1fdbc7"
+    },
+    "stabledist": {
+      "Package": "stabledist",
+      "Version": "0.7-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "dfd9740f06248fb6721d38df2e14ed7b"
     },
     "statmod": {
       "Package": "statmod",
@@ -1371,6 +1413,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "fde4fc571f5f61978652c229d4713845"
+    },
+    "timeSeries": {
+      "Package": "timeSeries",
+      "Version": "3062.100",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7b9aa24993295b2fadf63d4d0003666e"
     },
     "tinytex": {
       "Package": "tinytex",
