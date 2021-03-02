@@ -65,7 +65,7 @@ library(ggpubr)
 library(ggthemr)
 library(viridis)
 library(leaflet)
-library(sicegar)
+
 
 ggthemr("fresh")
 
