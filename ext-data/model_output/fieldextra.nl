@@ -1,3 +1,12 @@
+#!bin/bash
+# This script retrieves model output data using fieldextra from any supported grib-file
+# Unless you are at MeteoSwiss this is probably not possible
+# With the default settings hourly Alnus-Pollen concentrations at ground level are retrieved
+date=19030100
+path="/scratch/sadamov/wd/19_alnu_osm/${date}_c1e_tsa_alnu_osm/lm_coarse"
+species="ALNU"
+
+/bin/cat > pollen.nl <<EOM
 
 &RunSpecification
 strict_nl_parsing  = .true.
@@ -9,7 +18,7 @@ diagnostic_length  = 110
  dictionary           = "/oprusers/osm/opr.rh7.7/config/resources/dictionary_cosmo.txt"
  grib_definition_path = "/oprusers/osm/opr.rh7.7/config/resources/eccodes_definitions_cosmo",
                         "/oprusers/osm/opr.rh7.7/config/resources/eccodes_definitions_vendor"
-location_list         = "/users/sadamov/RProjects/CHAPo/data/model_output/mylocation_list.txt"
+location_list         = "./mylocation_list.txt"
 /
 
 &GlobalSettings
@@ -24,7 +33,7 @@ earth_axis_small   = 6371229.
 /
 
 &Process
-in_file  = "/scratch/sadamov/wd/osm/20022500_c1e_tsa_alnus_osm/lm_coarse/laf2020022500"
+in_file  = "${path}/laf20${date}"
 out_type = "INCORE"
 /
 &Process in_field  = "FR_LAND" /
@@ -32,15 +41,26 @@ out_type = "INCORE"
 
 
 &Process
-in_file  = "/scratch/sadamov/wd/osm/20022500_c1e_tsa_alnus_osm/lm_coarse/lfff00<HH>0000",
+in_file  = "${path}/lfff00<HH>0000",
 out_file = "mod_pollen.csv", 
 tstart=0,
 tstop=1,
 tincr=1,
 out_type = "XLS_TABLE",
-out_type_separator='    ',
+out_type_separator=' ',
 locgroup = "chall",           
 /            
 
-&Process in_field  = "ALNU", levlist=80 /
+&Process in_field  = "${species}", levlist=80 /
+
+EOM
+
+## RUNNING FIELDEXTRA TO RETRIEVE DATA - CAN TAKE SEVERAL HOURS IF TOO MUCH DATA IS RETRIEVED
+fieldextra pollen.nl
+
+rm pollen.nl fieldextra.diagnostic # namelist is removed by default
+
+sed -i '1,17d' mod_pollen.csv
+
+mv mod_pollen.csv ../../data/model_output
 

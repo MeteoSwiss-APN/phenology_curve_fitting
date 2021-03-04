@@ -125,7 +125,7 @@ create_kable <- function(data, title = "") {
 #' @param datapath File path to the txt-file containing the data
 #' @param type Hirst, Cosmo or Assim
 
-import_data <- function(datapath, type) {
+import_data_cosmo <- function(datapath, type) {
   read_table2(paste(datapath), col_names = TRUE) %>%
     # setting na during import failed for some reason
     mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
@@ -154,6 +154,31 @@ import_data <- function(datapath, type) {
       type = type
     ) %>%
     select(taxon, station, date, hour, value, datetime, type, measurement)
+}
+
+
+#' Retrieve Pollendata from txt-file (DWH)
+#'
+#' @param datapath File path to the txt-file containing the data
+#' 
+
+import_data_dwh <- function(datapath) {
+  read_delim(paste(datapath), delim = " ", skip = 17) %>%
+  pivot_longer(PLO:PCF, names_to = "station_short", values_to = "value") %>%
+  mutate(
+    value = if_else(value == -9999, NA_real_, value),
+    type = "Measurements",
+    measurement = "concentration",
+    datetime = ymd_h(paste0(
+      YYYY, sprintf("%02d", MM),
+      sprintf("%02d", DD),
+      sprintf("%02d", HH))),
+    date = lubridate::date(datetime),
+    hour = lubridate::hour(datetime)
+  ) %>%
+  inner_join(species, by = c("PARAMETER" = "fieldextra_taxon")) %>%
+  inner_join(stations, by = c("station_short" = "hirst_station")) %>%
+  select('taxon', 'station', 'date', 'hour', 'value', 'datetime', 'type', 'measurement')
 }
 
 #' Aggregate Hourly Data into Daily
