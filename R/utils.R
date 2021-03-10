@@ -1,10 +1,13 @@
 #' Create a Comparison Plot of Pollen Concentrations
 #'
+#' @param data_plot A dataframe containing pollen concentrations
 #' @param taxon The selected Pollen Type
 #' @param station The selected Pollen Type
 #' @param resolution Temporal resolution c("daily" or "hourly")
 #' @param rm_zeros Should zero/NA pollen measurements be removed from the plot
 #' @param combined Return the combined plots with title or seperate plots
+#' @param plot_dwh Should the Measurements from the DWH be plotted
+#' @param scale Should the timeseries be rescaled to 0-1
 #'
 #' @return A list of ggplots or a combined ggplot
 
@@ -15,11 +18,19 @@ plot_comb <- function(data_plot,
                       resolution,
                       rm_zeros,
                       combined,
-                      plot_dwh) {
+                      plot_dwh, 
+                      scale) {
 
   if (!plot_dwh){
     data_plot <- data_plot %>%
       filter(type != "Hirst")
+  }
+
+  if (scale){
+    data_plot <- data_plot %>%
+      group_by(station, type) %>%
+      mutate(value = rescale(value)) %>%
+      ungroup()
   }
 
   data_plot <- data_plot %>%
