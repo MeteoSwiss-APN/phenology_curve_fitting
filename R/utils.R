@@ -26,19 +26,19 @@ plot_comb <- function(data_plot,
       filter(type != "Hirst")
   }
 
+data_plot <- data_plot %>%
+  filter(
+    taxon %in% !!taxon,
+    station %in% !!station,
+    measurement == "concentration"
+  )
+
   if (scale){
     data_plot <- data_plot %>%
       group_by(station, type) %>%
       mutate(value = rescale(value)) %>%
       ungroup()
   }
-
-  data_plot <- data_plot %>%
-    filter(
-      taxon %in% !!taxon,
-      station %in% !!station,
-      measurement == "concentration"
-    )
 
   if (rm_zeros) {
     data_plot <- data_plot %>%
@@ -229,7 +229,7 @@ impute_hourly <- function(data) {
     pad(
       start_val = min(data_assim_hourly$datetime),
       end_val = max(data_assim_hourly$datetime),
-      group = c("station", "taxon"),
+      group = c("station", "taxon", "measurement"),
       by = "datetime",
       break_above = 2
     ) %>%
@@ -237,7 +237,6 @@ impute_hourly <- function(data) {
       date = lubridate::date(datetime),
       hour = lubridate::hour(datetime),
       type = unique(data$type),
-      measurement = "concentration",
       value = if_else(is.na(value), 0, value)
     )
 }
@@ -259,7 +258,7 @@ impute_daily <- function(data) {
     pad(
       start_val = min(data_assim_daily$datetime),
       end_val = max(data_assim_daily$datetime),
-      group = c("station", "taxon"),
+      group = c("station", "taxon", "measurement"),
       by = "datetime",
       break_above = 2
     ) %>%
@@ -267,7 +266,6 @@ impute_daily <- function(data) {
       date = lubridate::date(datetime),
       hour = lubridate::hour(datetime),
       type = unique(data$type),
-      measurement = "concentration",
       value = if_else(is.na(value), 0, value)
     )
 }
