@@ -24,6 +24,11 @@ Therefore, pollen concentrations are typically assessed with visual methods and 
 This vignette introduces some statistical procedures in addition to gain as much trust in the new model as possible.
 Knowing that pollen modeling has a large human component when it comes to verification and assessment of the result.
 
+$$ (0.998 + 0.05 * (\frac{saisl}{42.860})^{0.7}) * $$
+$$ \frac{1}{1 + \exp(-0.531 * \frac{42.860}{saisl} * (day - 12.585 * \frac{saisl}{42.860}))} * $$
+$$ (0.998 + 0.05 * (\frac{saisl}{42.860})^{0.7}) * $$
+$$ \frac{1}{1 + \exp(0.176 * (\frac{42.860}{saisl})^2 * (day - 31.326 * \frac{saisl}{42.860}))} $$
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -65,7 +70,6 @@ library(ggpubr)
 library(ggthemr)
 library(viridis)
 library(leaflet)
-
 
 ggthemr("fresh")
 
