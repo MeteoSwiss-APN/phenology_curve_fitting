@@ -1,9 +1,10 @@
 #!bin/bash
+# Execute this script in its location in /ext-data/model_output/
 # This script retrieves model output data using fieldextra from any supported grib-file
 # Unless you are at MeteoSwiss this is probably not possible
 # With the default settings hourly Alnus-Pollen concentrations at ground level are retrieved
-date=19030100
-path="/scratch/sadamov/wd/19_alnu_osm/${date}_c1e_tsa_alnu_osm/lm_coarse"
+date=20022300
+path="/scratch/sadamov/wd/20_alnu_fit_sdes_all/${date}_c1e_tsa_alnu_fit_sdes_all/lm_coarse"
 species="ALNU"
 
 /bin/cat > pollen.nl <<EOM
@@ -43,8 +44,8 @@ out_type = "INCORE"
 &Process
 in_file  = "${path}/lfff00<HH>0000",
 out_file = "mod_pollen.csv", 
-tstart=0,
-tstop=1,
+tstart=5,
+tstop=5,
 tincr=1,
 out_type = "XLS_TABLE",
 out_type_separator=' ',

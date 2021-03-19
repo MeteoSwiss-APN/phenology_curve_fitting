@@ -9,3 +9,7 @@ vignettes/Verification.html
 workspace.RData
 vignettes/fitting_the_curve.html
 timeseries.png
+gg_presentation*
+map_timo_osm.png
+.gitignore
+map_timo.png
