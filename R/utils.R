@@ -7,7 +7,6 @@
 #' @param rm_zeros Should zero/NA pollen measurements be removed from the plot
 #' @param combined Return the combined plots with title or seperate plots
 #' @param plot_dwh Should the Measurements from the DWH be plotted
-#' @param scale Should the timeseries be rescaled to 0-1
 #'
 #' @return A list of ggplots or a combined ggplot
 
@@ -18,8 +17,8 @@ plot_comb <- function(data_plot,
                       resolution,
                       rm_zeros,
                       combined,
-                      plot_dwh, 
-                      scale) {
+                      plot_dwh
+                      ) {
 
   if (!plot_dwh){
     data_plot <- data_plot %>%
@@ -32,13 +31,6 @@ data_plot <- data_plot %>%
     station %in% !!station,
     measurement == "concentration"
   )
-
-  if (scale){
-    data_plot <- data_plot %>%
-      group_by(station, type) %>%
-      mutate(value = rescale(value)) %>%
-      ungroup()
-  }
 
   if (rm_zeros) {
     data_plot <- data_plot %>%
