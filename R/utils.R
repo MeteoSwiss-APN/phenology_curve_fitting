@@ -17,20 +17,18 @@ plot_comb <- function(data_plot,
                       resolution,
                       rm_zeros,
                       combined,
-                      plot_dwh
-                      ) {
-
-  if (!plot_dwh){
+                      plot_dwh) {
+  if (!plot_dwh) {
     data_plot <- data_plot %>%
       filter(type != "Hirst")
   }
 
-data_plot <- data_plot %>%
-  filter(
-    taxon %in% !!taxon,
-    station %in% !!station,
-    measurement == "concentration"
-  )
+  data_plot <- data_plot %>%
+    filter(
+      taxon %in% !!taxon,
+      station %in% !!station,
+      measurement == "concentration"
+    )
 
   if (rm_zeros) {
     data_plot <- data_plot %>%
@@ -44,10 +42,9 @@ data_plot <- data_plot %>%
     " Pollen in ",
     station,
     " ",
-    stations %>% 
+    stations %>%
       filter(station == !!station) %>%
       pull(hirst_station)
-
   ))
 
   alpha_plot <- 0.5
@@ -163,25 +160,26 @@ import_data_cosmo <- function(datapath, type) {
 #' Retrieve Pollendata from txt-file (DWH)
 #'
 #' @param datapath File path to the txt-file containing the data
-#' 
+#'
 
 import_data_dwh <- function(datapath) {
   read_delim(paste(datapath), delim = " ", skip = 17) %>%
-  pivot_longer(PLO:PCF, names_to = "station_short", values_to = "value") %>%
-  mutate(
-    value = if_else(value == -9999, NA_real_, value),
-    type = "Measurements",
-    measurement = "concentration",
-    datetime = ymd_h(paste0(
-      YYYY, sprintf("%02d", MM),
-      sprintf("%02d", DD),
-      sprintf("%02d", HH))),
-    date = lubridate::date(datetime),
-    hour = lubridate::hour(datetime)
-  ) %>%
-  inner_join(species, by = c("PARAMETER" = "fieldextra_taxon")) %>%
-  inner_join(stations, by = c("station_short" = "hirst_station")) %>%
-  select('taxon', 'station', 'date', 'hour', 'value', 'datetime', 'type', 'measurement')
+    pivot_longer(PLO:PCF, names_to = "station_short", values_to = "value") %>%
+    mutate(
+      value = if_else(value == -9999, NA_real_, value),
+      type = "Measurements",
+      measurement = "concentration",
+      datetime = ymd_h(paste0(
+        YYYY, sprintf("%02d", MM),
+        sprintf("%02d", DD),
+        sprintf("%02d", HH)
+      )),
+      date = lubridate::date(datetime),
+      hour = lubridate::hour(datetime)
+    ) %>%
+    inner_join(species, by = c("PARAMETER" = "fieldextra_taxon")) %>%
+    inner_join(stations, by = c("station_short" = "hirst_station")) %>%
+    select("taxon", "station", "date", "hour", "value", "datetime", "type", "measurement")
 }
 
 #' Aggregate Hourly Data into Daily
@@ -207,20 +205,23 @@ aggregate_pollen <- function(data) {
 #' Impute Hourly Data
 #'
 #' @param data Data Frame containing hourly concentrations
+#' @param min_date Beginning of the timeseries in datetime format
+#' @param max_date End of the timeseries in datetime format
+#' @param taxon Unique taxon to impute each one seperately
 
-impute_hourly <- function(data) {
+impute_hourly <- function(data, min_date = min(data$datetime), max_date = max(data$datetime), taxon = unique(data$taxon)) {
   data %>%
     filter(
       between(
         datetime,
-        min(data_assim_hourly$datetime),
-        max(data_assim_hourly$datetime)
+        min_date,
+        max_date
       ),
-      taxon == unique(data_assim_hourly$taxon)
+      taxon %in% taxon
     ) %>%
     pad(
-      start_val = min(data_assim_hourly$datetime),
-      end_val = max(data_assim_hourly$datetime),
+      start_val = min_date,
+      end_val = min_date,
       group = c("station", "taxon", "measurement"),
       by = "datetime",
       break_above = 2
@@ -236,20 +237,23 @@ impute_hourly <- function(data) {
 #' Impute Daily Data
 #'
 #' @param data Data Frame containing daily concentrations
+#' @param min_date Beginning of the timeseries in datetime format
+#' @param max_date End of the timeseries in datetime format
+#' @param taxon_selection Unique taxon to impute each one seperately
 
-impute_daily <- function(data) {
+impute_daily <- function(data, min_date = min(data$datetime), max_date = max(data$datetime), taxon_selection = unique(data$taxon)) {
   data %>%
     filter(
+      taxon %in% taxon_selection,
       between(
         datetime,
-        min(data_assim_daily$datetime),
-        max(data_assim_daily$datetime)
-      ),
-      taxon == unique(data_assim_daily$taxon)
+        min_date,
+        max_date
+      )
     ) %>%
     pad(
-      start_val = min(data_assim_daily$datetime),
-      end_val = max(data_assim_daily$datetime),
+      start_val = min_date,
+      end_val = max_date,
       group = c("station", "taxon", "measurement"),
       by = "datetime",
       break_above = 2

@@ -14,3 +14,4 @@ map_timo_osm.png
 .gitignore
 map_timo.png
 .vscode
+vignettes/tables
