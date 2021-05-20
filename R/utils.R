@@ -136,10 +136,10 @@ import_data_cosmo <- function(datapath, type) {
     mutate(
       measurement = case_when(
         str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
-        str_detect(PARAMETER, pattern = "fe") ~ "emission",
+        str_detect(PARAMETER, pattern = "saisl") ~ "length",
         TRUE ~ "concentration"
       ),
-      PARAMETER = str_replace_all(PARAMETER, "sdes|fe", "")
+      PARAMETER = str_replace_all(PARAMETER, "sdes|saisl", "")
     ) %>%
     inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
     inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
