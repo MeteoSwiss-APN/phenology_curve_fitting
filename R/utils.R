@@ -137,9 +137,13 @@ import_data_cosmo <- function(datapath, type) {
       measurement = case_when(
         str_detect(PARAMETER, pattern = "sdes") ~ "phenology",
         str_detect(PARAMETER, pattern = "saisl") ~ "length",
+        str_detect(PARAMETER, pattern = "saisn") ~ "current_day",
+        str_detect(PARAMETER, pattern = "tthrs") ~ "tempsum_min",
+        str_detect(PARAMETER, pattern = "tthre") ~ "tempsum_max",
+        str_detect(PARAMETER, pattern = "ctsum") ~ "tempsum",
         TRUE ~ "concentration"
       ),
-      PARAMETER = str_replace_all(PARAMETER, "sdes|saisl", "")
+      PARAMETER = str_replace_all(PARAMETER, "sdes|saisl|saisn|tthrs|tthre|ctsum", "")
     ) %>%
     inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
     inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
@@ -162,13 +166,29 @@ import_data_cosmo <- function(datapath, type) {
 #' @param datapath File path to the txt-file containing the data
 #'
 
-import_data_dwh <- function(datapath) {
-  read_delim(paste(datapath), delim = " ", skip = 17) %>%
-    pivot_longer(PLO:PCF, names_to = "station_short", values_to = "value") %>%
+import_data_dwh <- function(datapath, parameter = "pollen") {
+
+  cols <- c("station", "date", "hour", "value", "datetime", "type", "measurement")
+  
+  if (parameter == "pollen") {
+    stn_start <- "PLO"
+    stn_end <- "PCF"
+    meas <- "concentration"
+    stn_abbr <- "hirst_station"
+    cols <- c("taxon", cols)
+  } else if (parameter == "t2m") {
+    stn_start <- "VIS"
+    stn_end <- "PUY"
+    meas <- "temperature"
+    stn_abbr <- "t2m_station"
+  }
+
+  output <- read_delim(paste(datapath), delim = " ", skip = 17) %>%
+    pivot_longer({{ stn_start }}:{{ stn_end }}, names_to = "station_short", values_to = "value") %>%
     mutate(
       value = if_else(value == -9999, NA_real_, value),
       type = "Measurements",
-      measurement = "concentration",
+      measurement = meas,
       datetime = ymd_h(paste0(
         YYYY, sprintf("%02d", MM),
         sprintf("%02d", DD),
@@ -176,10 +196,13 @@ import_data_dwh <- function(datapath) {
       )),
       date = lubridate::date(datetime),
       hour = lubridate::hour(datetime)
-    ) %>%
-    inner_join(species, by = c("PARAMETER" = "fieldextra_taxon")) %>%
-    inner_join(stations, by = c("station_short" = "hirst_station")) %>%
-    select("taxon", "station", "date", "hour", "value", "datetime", "type", "measurement")
+    )
+  if (parameter == "pollen") {
+    output %<>% inner_join(species, by = c("PARAMETER" = "fieldextra_taxon"))
+  }
+  output %<>%
+    inner_join(stations, by = c("station_short" = stn_abbr)) %>%
+    select(cols)
 }
 
 #' Aggregate Hourly Data into Daily
@@ -221,7 +244,7 @@ impute_hourly <- function(data, min_date = min(data$datetime), max_date = max(da
     ) %>%
     pad(
       start_val = min_date,
-      end_val = min_date,
+      end_val = max_date,
       group = c("station", "taxon", "measurement"),
       by = "datetime",
       break_above = 2
