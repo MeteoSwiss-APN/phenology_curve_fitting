@@ -7,7 +7,7 @@ dwh_retrieve -s surface_stations -l 45,48,5,11 -i nat_abbr,PBE,PBS,PBU,PCF,PDS,P
 
 # This retrieves the hourly values for the same three species for the years 2019-2020
 dwh_retrieve -s surface_stations -l 45,48,5,11 -i nat_abbr,PBE,PBS,PBU,PCF,PDS,PGE,PLO,PLS,PLU,PLZ,PMU,PNE,PVI,PZH \
-  -t 201901010000-202101010000 -f atab -p 5993,6086,5994 -o pollen_dwh_hourly.txt
+  -t 201901010000-202105010000 -f atab -p 5993,6086,5994 -o pollen_dwh_hourly.txt -c 204
 
 # Separator should always be one blank and not multiple
 sed -i 's/  */ /g' pollen_dwh_daily.txt
@@ -16,5 +16,5 @@ sed -i 's/  */ /g' pollen_dwh_hourly.txt
 sed -i 's/[[:blank:]]*$//' pollen_dwh_daily.txt
 sed -i 's/[[:blank:]]*$//' pollen_dwh_hourly.txt
 
-mv pollen_dwh_daily ../../data/dwh/
-mv pollen_dwh_hourly ../../data/dwh/
+mv pollen_dwh_daily.txt ../../data/dwh/
+mv pollen_dwh_hourly.txt ../../data/dwh/
