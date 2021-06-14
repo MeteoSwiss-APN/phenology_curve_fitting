@@ -359,3 +359,14 @@ my_maptheme <- function(...) {
       ...
     )
 }
+
+#' Shift the hours 15h backwards, as cosmo updates the phenology every day at 14h
+#'
+#' @param data Data Frame containing hourly values
+shift_hours <- function(data) {
+  data %>%
+  mutate(datetime = datetime - hours(15),
+         date = lubridate::date(datetime),
+         hour = hour(datetime)) %>%
+  filter(between(date, min(date) + days(1), max(date) - days(1)))
+}
