@@ -18,6 +18,8 @@ knitr::opts_chunk$set(echo = FALSE,
                       fig.align = "center",
                       out.width = "100%",
                       out.height = "100%")
+
+library(here)
 ```
 
 # Einleitung
@@ -38,13 +40,13 @@ Im Projekt CHAPo werden automatische Pollenmessgeräte auf dem ganzem Gebiet der
 Die Pollen sind anhand des folgenden Schemas in COSMO-ART implementiert.
 
 ```{r}
-knitr::include_graphics("figures/diagram_implementation.png")
+knitr::include_graphics(paste0(here(), "/vignettes/figures/diagram_implementation.png"))
 ```
 
 Die Bedeutung der Symbole und das Diagramm stammen von Zink, 2014.
 
 ```{r out.width="75%"}
-knitr::include_graphics("figures/parameters.png")
+knitr::include_graphics(paste0(here(), "/vignettes/figures/parameters.png"))
 ```
 
 Folgende Teilgebiete der Pollen-Implementierung könnten von den neuen Echtzeit-Daten profitieren und sind verantwortlich für den grössten Teil der Unsicherheiten in der numerischen Pollenvorhersage:
