@@ -16,3 +16,4 @@ map_timo.png
 .vscode
 vignettes/tables
 vignettes/season_animation.html
+data/other/season_def.RData

@@ -170,3 +170,4 @@ stations <-
 
 save(species, file = paste0(here(), "/data/other/species.RData"))
 save(stations, file = paste0(here(), "/data/other/stations.RData"))
+
