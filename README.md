@@ -38,7 +38,7 @@ In the folder */ext-data* scripts are stored that will retrieve and preprocess t
 - **fitting_the_curve**: Using historic pollen measurements to fit optimal double-sigmoid curve representing the season description of a species (phenology)
 - **init.R**: As we are using jupyter notebooks, renv was not able to create a snapshot of all used packages. Hence I am adding the required libraries manually in this R-File. Let's hope they support jupyter soon.
 - **initial_tuning**: Finding optimal starting values for the tuning factor, instead of constant values across the domain (not finished).
-- **other_stuff**: Collection of plots and statistical methods to evaluate model output. Rather messy vignette, that probably can be deleted at some point.
 - **quick_map**: Draws a quick raster map of an netCDF file, ugly but fast.
 - **season_animation**: Creates an animated GIF to display the changes in the season description curve in the model (phenology).
-- **verification**: Validates model output, creating all required plots and statistical metrics wo identify model weaknesses and strengths.
+- **verification_multi_model**: Validates model output, creating all required plots and statistical metrics wo identify model weaknesses and strengths.
+- **verification_single_model**: Collection of plots and maps to evaluate the output of one model versus the measurements.

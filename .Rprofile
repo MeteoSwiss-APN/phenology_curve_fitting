@@ -1,5 +1,5 @@
-~# if (Sys.getenv("HOME") != "/home/jovyan") {
-# source("renv/activate.R")  
+if (Sys.getenv("HOME") != "/home/jovyan") {
+source("renv/activate.R")  
 
 #   Sys.setenv(TERM_PROGRAM = "vscode")
 #   Sys.setenv(DOWNLOAD_STATIC_LIBV8 = 1)
@@ -24,7 +24,7 @@
 #     options(html_type = "html")
 #     options(vsc.helpPanel = FALSE)
 #     options(device = function(...) {
-#       On Tsa the fonts are not automatically recognized by hdd
+#       # On Tsa the fonts are not automatically recognized by hdd
 #       httpgd::hgd()
 #       .vsc.browser(httpgd::hgd_url(), viewer = "Beside")
 #     })
