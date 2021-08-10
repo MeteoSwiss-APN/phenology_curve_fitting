@@ -141,9 +141,10 @@ import_data_cosmo <- function(datapath, type) {
         str_detect(PARAMETER, pattern = "tthrs") ~ "tempsum_min",
         str_detect(PARAMETER, pattern = "tthre") ~ "tempsum_max",
         str_detect(PARAMETER, pattern = "ctsum") ~ "tempsum",
+        str_detect(PARAMETER, pattern = "tune") ~ "tuning",
         TRUE ~ "concentration"
       ),
-      PARAMETER = str_replace_all(PARAMETER, "sdes|saisl|saisn|tthrs|tthre|ctsum", "")
+      PARAMETER = str_replace_all(PARAMETER, "sdes|saisl|saisn|tthrs|tthre|ctsum|tune", "")
     ) %>%
     inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
     inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
