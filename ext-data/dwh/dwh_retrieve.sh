@@ -3,7 +3,7 @@
 
 module purge
 
-# The UTC 0-0 values are only available from 2017 onwards, hence local time are retrieved
+# # The UTC 0-0 values are only available from 2017 onwards, hence local time are retrieved
 dwh_retrieve -s surface_stations -l 45,48,5,11 -i nat_abbr,PBE,PBS,PBU,PCF,PDS,PGE,PLO,PLS,PLU,PLZ,PMU,PNE,PVI,PZH \
   -t 200001010000-202107010000 -f atab -p 1315,1323,1469,1343 -o pollen_dwh_daily.txt
 
