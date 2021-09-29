@@ -168,9 +168,8 @@ import_data_cosmo <- function(datapath, type) {
 #'
 
 import_data_dwh <- function(datapath, parameter = "pollen") {
-
   cols <- c("station", "date", "hour", "value", "datetime", "type", "measurement")
-  
+
   if (parameter == "pollen") {
     stn_start <- "PLO"
     stn_end <- "PCF"
@@ -210,20 +209,35 @@ import_data_dwh <- function(datapath, parameter = "pollen") {
 #'
 #' @param data Data Frame containing hourly concentrations
 
-aggregate_pollen <- function(data) {
-  data %>%
-    group_by(taxon, station, date, type, measurement) %>%
-    # Values are not averaged per hour but simply retrieved at every hour
-    summarise(value = mean(value, na.rm = TRUE)) %>%
-    ungroup() %>%
-    mutate(
-      hour = 0,
-      # date = date + days(1), # Depends on the definition
-      datetime = ymd_hm(paste0(
-        as.character(date),
-        paste0(sprintf("%02d", hour), ":00")
-      ))
-    )
+aggregate_pollen <- function(data, level = "daily") {
+  if (level == "daily") {
+    data %>%
+      group_by(taxon, station, date, type, measurement) %>%
+      # Values are not averaged per hour but simply retrieved at every hour
+      summarise(value = mean(value, na.rm = TRUE)) %>%
+      ungroup() %>%
+      mutate(
+        hour = 0,
+        # date = date + days(1), # Depends on the definition
+        datetime = ymd_hm(paste0(
+          as.character(date),
+          paste0(sprintf("%02d", hour), ":00")
+        ))
+      )
+  } else if (level == "12h") {
+    data %>% mutate(hour = if_else(hour < 12, 12, 0),
+      date = if_else(hour == 0, date + days(1), date)) %>%
+      group_by(taxon, station, date, hour, type, measurement) %>%
+      # Values are not averaged per hour but simply retrieved at every hour
+      summarise(value = mean(value, na.rm = TRUE)) %>%
+      ungroup() %>%
+      mutate(
+        datetime = ymd_hm(paste0(
+          as.character(date),
+          paste0(sprintf("%02d", hour), ":00")
+        ))
+      )
+  }
 }
 
 #' Impute Hourly Data
@@ -233,7 +247,7 @@ aggregate_pollen <- function(data) {
 #' @param max_date End of the timeseries in datetime format
 #' @param taxon Unique taxon to impute each one seperately
 
-impute_hourly <- function(data, min_date = min(data$datetime), max_date = max(data$datetime), taxon = unique(data$taxon)) {
+impute_pollen <- function(data, min_date = min(data$datetime), max_date = max(data$datetime), taxon = unique(data$taxon)) {
   data %>%
     filter(
       between(
@@ -242,38 +256,6 @@ impute_hourly <- function(data, min_date = min(data$datetime), max_date = max(da
         max_date
       ),
       taxon %in% taxon
-    ) %>%
-    pad(
-      start_val = min_date,
-      end_val = max_date,
-      group = c("station", "taxon", "measurement"),
-      by = "datetime",
-      break_above = 2
-    ) %>%
-    mutate(
-      date = lubridate::date(datetime),
-      hour = lubridate::hour(datetime),
-      type = unique(data$type),
-      value = if_else(is.na(value), 0, value)
-    )
-}
-
-#' Impute Daily Data
-#'
-#' @param data Data Frame containing daily concentrations
-#' @param min_date Beginning of the timeseries in datetime format
-#' @param max_date End of the timeseries in datetime format
-#' @param taxon_selection Unique taxon to impute each one seperately
-
-impute_daily <- function(data, min_date = min(data$datetime), max_date = max(data$datetime), taxon_selection = unique(data$taxon)) {
-  data %>%
-    filter(
-      taxon %in% taxon_selection,
-      between(
-        datetime,
-        min_date,
-        max_date
-      )
     ) %>%
     pad(
       start_val = min_date,
@@ -366,8 +348,10 @@ my_maptheme <- function(...) {
 #' @param data Data Frame containing hourly values
 shift_hours <- function(data) {
   data %>%
-  mutate(datetime = datetime - hours(15),
-         date = lubridate::date(datetime),
-         hour = hour(datetime)) %>%
-  filter(between(date, min(date) + days(1), max(date) - days(1)))
+    mutate(
+      datetime = datetime - hours(15),
+      date = lubridate::date(datetime),
+      hour = hour(datetime)
+    ) %>%
+    filter(between(date, min(date) + days(1), max(date) - days(1)))
 }
