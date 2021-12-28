@@ -25,7 +25,7 @@ The setup works as follow:
   9.  Make the IRKernel available by executing: `IRkernel::installspec()`
   10. Close the R-Console: `q()`
   11. Start the Jupyter Notebook: `jupyter notebook` in the BASH terminal
-  12. Navigate the content in your browser webbrowser of choice (e.g. Firefox or Brave)
+  12. Navigate through the content in your browser webbrowser of choice (e.g. Firefox or Brave), by clicking on the link displayed in the terminal.
 ## Data
 
 There is quite a lot of external data required for this analysis and only people working
