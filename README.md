@@ -25,13 +25,13 @@ The setup works as follow:
   9.  Make the IRKernel available by executing: `IRkernel::installspec()`
   10. Close the R-Console: `q()`
   11. Start the Jupyter Notebook: `jupyter notebook` in the BASH terminal
-  12. Navigate the content in your browser webbrowser of choice (e.g. Firefox or Brave)
+  12. Navigate through the content in your browser webbrowser of choice (e.g. Firefox or Brave), by clicking on the link displayed in the terminal.
 ## Data
 
-There is quite a lot of external data required for this analysis and only people working
-at MeteoSwiss will have access to all of it. In the folder */ext-data* scripts are stored
+There is data required for this analysis. In the folder */ext-data* a script is stored
 that will retrieve and preprocess the data from external sources. The ready-made data is
-then stored in the */data* folder and accessed by various scripts.
+then stored in the */data* folder. The retrieval is only available within the MeteoSwiss
+Network
 
 - **dwh**: Text files of Pollen-Measurements (Concentrations 1/m^3) averaged daily.
-  The data is retrieved with the ruby script dwh_retrieve(). Used in various vignettes.
+  The data is retrieved with the ruby script dwh_retrieve().
