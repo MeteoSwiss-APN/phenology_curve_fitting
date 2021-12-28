@@ -20,12 +20,12 @@ The setup works as follow:
   4. Change into the newly cloned directory: `cd phenology_curve_fitting`
   5. Create a new conda environment: `conda env create -f environment.yml` (confirm with y, this will take a minute)
   6. Activate the new conda environment: `conda activate phenology_curve_fitting`
-  7. Start the R-Console: `r`
-  8. Install two additional R-Packages not available in conda: `install.packages("sicegar", "AeRobiology")` (this will also take a while)
+  7. Start the R-Console: `R`
+  8. Install two additional R-Packages not available in conda: `install.packages(c("sicegar", "AeRobiology"))` (this will also take a while)
   9.  Make the IRKernel available by executing: `IRkernel::installspec()`
   10. Close the R-Console: `q()`
   11. Start the Jupyter Notebook: `jupyter notebook` in the BASH terminal
-  12. Navigate through the content in your browser webbrowser of choice (e.g. Firefox or Brave), by clicking on the link displayed in the terminal.
+  12. Navigate through the content in your browser webbrowser of choice (e.g. Firefox or Brave), by clicking on the link displayed in the terminal. Then open the vignette folder and the notebook in there to start the analysis.
 ## Data
 
 There is data required for this analysis. In the folder */ext-data* a script is stored
