@@ -128,8 +128,8 @@ create_kable <- function(data, title = "") {
 import_data_cosmo <- function(datapath, type) {
   read_table2(paste(datapath), col_names = TRUE) %>%
     # setting na during import failed for some reason
-    mutate_at(vars(CHBASE:CHZUER), ~ ifelse(. < 0, NA_real_, .)) %>%
-    pivot_longer(CHBASE:CHZUER,
+    mutate_at(vars(PBS:PZH), ~ ifelse(. < 0, NA_real_, .)) %>%
+    pivot_longer(PBS:PZH,
       names_to = "station_tag",
       values_to = "value"
     ) %>%
@@ -147,7 +147,7 @@ import_data_cosmo <- function(datapath, type) {
       PARAMETER = str_replace_all(PARAMETER, "sdes|saisl|saisn|tthrs|tthre|ctsum|tune", "")
     ) %>%
     inner_join(species, by = c("PARAMETER" = "cosmo_taxon")) %>%
-    inner_join(stations, by = c("station_tag" = "cosmo_station")) %>%
+    inner_join(stations, by = c("station_tag" = "hirst_station")) %>%
     mutate(
       datetime = ymd_h(paste0(
         YYYY, sprintf("%02d", MM),
